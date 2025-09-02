@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart'; // ✅ Needed for Firestore
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'doctor_dashboard.dart';
 import 'patient_dashboard.dart';
 import 'signup_page.dart';
@@ -15,14 +15,27 @@ class LoginPage extends StatefulWidget {
 class _LoginPageState extends State<LoginPage> {
   final TextEditingController emailController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
+  bool _isLoading = false;
 
   void _login() async {
+    String email = emailController.text.trim();
+    String password = passwordController.text.trim();
+
+    if (email.isEmpty || password.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Please enter all fields")),
+      );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
     try {
       // 1. Sign in with Firebase
       UserCredential userCredential =
           await FirebaseAuth.instance.signInWithEmailAndPassword(
-        email: emailController.text.trim(),
-        password: passwordController.text.trim(),
+        email: email,
+        password: password,
       );
 
       User? user = userCredential.user;
@@ -30,7 +43,7 @@ class _LoginPageState extends State<LoginPage> {
       // 2. Get role from Firestore
       DocumentSnapshot doc = await FirebaseFirestore.instance
           .collection("users")
-          .doc(user!.uid)
+          .doc(user!.uid) // ✅ UID from Auth
           .get();
 
       if (doc.exists) {
@@ -53,10 +66,16 @@ class _LoginPageState extends State<LoginPage> {
           const SnackBar(content: Text("User data not found in Firestore")),
         );
       }
+    } on FirebaseAuthException catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Login failed: ${e.message}")),
+      );
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Login failed: $e")),
+        SnackBar(content: Text("An error occurred: $e")),
       );
+    } finally {
+      setState(() => _isLoading = false);
     }
   }
 
@@ -79,7 +98,9 @@ class _LoginPageState extends State<LoginPage> {
               obscureText: true,
             ),
             const SizedBox(height: 20),
-            ElevatedButton(onPressed: _login, child: const Text("Login")),
+            _isLoading
+                ? const CircularProgressIndicator()
+                : ElevatedButton(onPressed: _login, child: const Text("Login")),
             TextButton(
               onPressed: () {
                 Navigator.push(

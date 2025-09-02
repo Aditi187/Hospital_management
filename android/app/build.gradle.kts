@@ -1,3 +1,5 @@
+
+
 plugins {
     id("com.android.application")
     id("kotlin-android")
@@ -5,6 +7,7 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
     // Apply the Google services plugin
     id("com.google.gms.google-services")
+    
 }
 
 android {

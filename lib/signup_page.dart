@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart'; // ✅ Needed for Firestore
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'doctor_dashboard.dart';
 import 'patient_dashboard.dart';
 
@@ -14,27 +14,62 @@ class SignupPage extends StatefulWidget {
 class _SignupPageState extends State<SignupPage> {
   final TextEditingController emailController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
-  String selectedRole = "Doctor"; // Default role
+  final TextEditingController nameController = TextEditingController();
+  final TextEditingController ageController = TextEditingController();
+  final TextEditingController specializationController =
+      TextEditingController();
+  final TextEditingController experienceController = TextEditingController();
 
-  void _signup() async {
+  String selectedRole = "Patient";
+  bool _isLoading = false;
+
+  Future<void> _signup() async {
+    String email = emailController.text.trim();
+    String password = passwordController.text.trim();
+    String name = nameController.text.trim();
+
+    if (email.isEmpty || password.isEmpty || name.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Please fill all required fields")),
+      );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
     try {
-      // 1. Create user with Firebase Auth
+      print("🔹 Creating user...");
       UserCredential userCredential =
           await FirebaseAuth.instance.createUserWithEmailAndPassword(
-        email: emailController.text.trim(),
-        password: passwordController.text.trim(),
+        email: email,
+        password: password,
       );
 
       User? user = userCredential.user;
+      print("✅ User created: ${user?.uid}");
 
-      // 2. Save user data + role in Firestore
-      await FirebaseFirestore.instance.collection("users").doc(user!.uid).set({
-        "email": emailController.text.trim(),
-        "role": selectedRole.toLowerCase(), // ✅ save role in lowercase
+      Map<String, dynamic> userData = {
+        "email": email,
+        "role": selectedRole.toLowerCase(),
+        "name": name,
         "createdAt": Timestamp.now(),
-      });
+      };
 
-      // 3. Navigate to correct dashboard
+      if (selectedRole == "Patient") {
+        userData["age"] = ageController.text.trim();
+      } else if (selectedRole == "Doctor") {
+        userData["specialization"] = specializationController.text.trim();
+        userData["experience"] = experienceController.text.trim();
+      }
+
+      print("🔹 Saving data to Firestore...");
+      await FirebaseFirestore.instance
+          .collection("users")
+          .doc(user!.uid)
+          .set(userData);
+      print("✅ Data saved to Firestore");
+
+      print("🔹 Redirecting to dashboard...");
       if (selectedRole == "Doctor") {
         Navigator.pushReplacement(
           context,
@@ -46,10 +81,16 @@ class _SignupPageState extends State<SignupPage> {
           MaterialPageRoute(builder: (context) => const PatientDashboard()),
         );
       }
-    } catch (e) {
+      print("✅ Navigation done!");
+    } on FirebaseAuthException catch (e) {
+      print("❌ FirebaseAuthException: ${e.message}");
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Signup failed: $e")),
+        SnackBar(content: Text("Signup failed: ${e.message}")),
       );
+    } catch (e) {
+      print("❌ Unexpected error: $e");
+    } finally {
+      setState(() => _isLoading = false);
     }
   }
 
@@ -58,10 +99,13 @@ class _SignupPageState extends State<SignupPage> {
     return Scaffold(
       appBar: AppBar(title: const Text("Sign Up")),
       body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+        padding: const EdgeInsets.all(16.0),
+        child: ListView(
           children: [
+            TextField(
+              controller: nameController,
+              decoration: const InputDecoration(labelText: "Full Name"),
+            ),
             TextField(
               controller: emailController,
               decoration: const InputDecoration(labelText: "Email"),
@@ -71,20 +115,42 @@ class _SignupPageState extends State<SignupPage> {
               decoration: const InputDecoration(labelText: "Password"),
               obscureText: true,
             ),
-            const SizedBox(height: 20),
             DropdownButton<String>(
               value: selectedRole,
-              items: ["Doctor", "Patient"].map((role) {
-                return DropdownMenuItem(value: role, child: Text(role));
-              }).toList(),
+              items: const [
+                DropdownMenuItem(value: "Patient", child: Text("Patient")),
+                DropdownMenuItem(value: "Doctor", child: Text("Doctor")),
+              ],
               onChanged: (value) {
                 setState(() {
                   selectedRole = value!;
                 });
               },
             ),
+            if (selectedRole == "Patient")
+              TextField(
+                controller: ageController,
+                decoration: const InputDecoration(labelText: "Age"),
+              ),
+            if (selectedRole == "Doctor") ...[
+              TextField(
+                controller: specializationController,
+                decoration:
+                    const InputDecoration(labelText: "Specialization"),
+              ),
+              TextField(
+                controller: experienceController,
+                decoration:
+                    const InputDecoration(labelText: "Experience (Years)"),
+              ),
+            ],
             const SizedBox(height: 20),
-            ElevatedButton(onPressed: _signup, child: const Text("Sign Up")),
+            _isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : ElevatedButton(
+                    onPressed: _signup,
+                    child: const Text("Sign Up"),
+                  ),
           ],
         ),
       ),
