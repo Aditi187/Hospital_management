@@ -13,17 +13,17 @@ class LoginPage extends StatefulWidget {
 }
 
 class _LoginPageState extends State<LoginPage> {
-  final TextEditingController emailController = TextEditingController();
+  final TextEditingController identifierController = TextEditingController(); // Personal ID or Email
   final TextEditingController passwordController = TextEditingController();
   bool _isLoading = false;
 
   void _login() async {
-    String email = emailController.text.trim();
+    String identifier = identifierController.text.trim();
     String password = passwordController.text.trim();
 
-    if (email.isEmpty || password.isEmpty) {
+    if (identifier.isEmpty || password.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Please enter all fields")),
+        const SnackBar(content: Text("Please fill all fields")),
       );
       return;
     }
@@ -31,39 +31,54 @@ class _LoginPageState extends State<LoginPage> {
     setState(() => _isLoading = true);
 
     try {
-      // 1. Sign in with Firebase
+      String emailToUse = identifier;
+
+      // 🔹 If user typed Personal ID instead of email
+      if (!identifier.contains('@')) {
+        QuerySnapshot query = await FirebaseFirestore.instance
+            .collection('users')
+            .where('personalId', isEqualTo: identifier)
+            .limit(1)
+            .get();
+
+        if (query.docs.isEmpty) {
+          throw Exception("Invalid Personal ID");
+        }
+
+        // ✅ Correct way to fetch field value
+        Map<String, dynamic> userData =
+            query.docs.first.data() as Map<String, dynamic>;
+        emailToUse = userData['email'];
+      }
+
+      // 🔹 Login with Firebase Auth
       UserCredential userCredential =
           await FirebaseAuth.instance.signInWithEmailAndPassword(
-        email: email,
+        email: emailToUse,
         password: password,
       );
 
       User? user = userCredential.user;
 
-      // 2. Get role from Firestore
+      // 🔹 Fetch role from Firestore
       DocumentSnapshot doc = await FirebaseFirestore.instance
-          .collection("users")
-          .doc(user!.uid) // ✅ UID from Auth
+          .collection('users')
+          .doc(user!.uid)
           .get();
 
-      if (doc.exists) {
-        String role = doc["role"];
+      Map<String, dynamic> userDoc = doc.data() as Map<String, dynamic>;
+      String role = userDoc['role'];
 
-        // 3. Redirect to correct dashboard
-        if (role == "doctor") {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (context) => const DoctorDashboard()),
-          );
-        } else {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (context) => const PatientDashboard()),
-          );
-        }
+      // 🔹 Redirect based on role
+      if (role == "doctor") {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const DoctorDashboard()),
+        );
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("User data not found in Firestore")),
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const PatientDashboard()),
         );
       }
     } on FirebaseAuthException catch (e) {
@@ -89,8 +104,9 @@ class _LoginPageState extends State<LoginPage> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             TextField(
-              controller: emailController,
-              decoration: const InputDecoration(labelText: "Email"),
+              controller: identifierController,
+              decoration:
+                  const InputDecoration(labelText: "Email or Personal ID"),
             ),
             TextField(
               controller: passwordController,
@@ -100,7 +116,10 @@ class _LoginPageState extends State<LoginPage> {
             const SizedBox(height: 20),
             _isLoading
                 ? const CircularProgressIndicator()
-                : ElevatedButton(onPressed: _login, child: const Text("Login")),
+                : ElevatedButton(
+                    onPressed: _login,
+                    child: const Text("Login"),
+                  ),
             TextButton(
               onPressed: () {
                 Navigator.push(
