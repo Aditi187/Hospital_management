@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+<<<<<<< HEAD
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'services/firestore_service.dart';
@@ -888,6 +889,17 @@ class _DoctorDashboardState extends State<DoctorDashboard> {
           ),
         ],
       ),
+=======
+
+class DoctorDashboard extends StatelessWidget {
+  const DoctorDashboard({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text("Doctor Dashboard")),
+      body: const Center(child: Text("Welcome Doctor!")),
+>>>>>>> 4685f151cb62db19ed2c4d165ee7db2582cd4f02
     );
   }
 }

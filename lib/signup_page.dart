@@ -16,8 +16,12 @@ class _SignupPageState extends State<SignupPage> {
   final TextEditingController passwordController = TextEditingController();
   final TextEditingController nameController = TextEditingController();
   final TextEditingController ageController = TextEditingController();
+<<<<<<< HEAD
   final TextEditingController specializationController =
       TextEditingController();
+=======
+  final TextEditingController specializationController = TextEditingController();
+>>>>>>> 4685f151cb62db19ed2c4d165ee7db2582cd4f02
   final TextEditingController experienceController = TextEditingController();
 
   String selectedRole = "Patient";
@@ -35,6 +39,7 @@ class _SignupPageState extends State<SignupPage> {
       return;
     }
 
+<<<<<<< HEAD
     setState(() => _isLoading = true);
 
     try {
@@ -67,6 +72,83 @@ class _SignupPageState extends State<SignupPage> {
       print("✅ Data saved to Firestore");
 
       print("🔹 Redirecting to dashboard...");
+=======
+    if (password.length < 6) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Password must be at least 6 characters")),
+      );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      // 1️⃣ Create user in Firebase Auth
+      UserCredential userCredential =
+          await FirebaseAuth.instance.createUserWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+      User? user = userCredential.user;
+
+      String counterDoc = selectedRole == "Doctor" ? "doctorId" : "patientId";
+      DocumentReference counterRef =
+          FirebaseFirestore.instance.collection('counters').doc(counterDoc);
+
+      String personalId = "";
+
+      // 2️⃣ Transaction to generate personalId and save user data
+      await FirebaseFirestore.instance.runTransaction((transaction) async {
+        DocumentSnapshot counterSnapshot = await transaction.get(counterRef);
+
+        int currentCount = counterSnapshot.exists ? counterSnapshot['current'] : 100;
+        int newCount = currentCount + 1;
+
+        personalId =
+            (selectedRole == "Doctor" ? "D" : "P") + newCount.toString();
+
+        transaction.set(counterRef, {'current': newCount},
+            SetOptions(merge: true));
+
+        Map<String, dynamic> userData = {
+          "email": email,
+          "role": selectedRole.toLowerCase(),
+          "name": name,
+          "personalId": personalId,
+          "createdAt": Timestamp.now(),
+        };
+
+        if (selectedRole == "Patient") {
+          userData["age"] = ageController.text.trim();
+        } else if (selectedRole == "Doctor") {
+          userData["specialization"] = specializationController.text.trim();
+          userData["experience"] = experienceController.text.trim();
+        }
+
+        transaction.set(
+          FirebaseFirestore.instance.collection("users").doc(user!.uid),
+          userData,
+        );
+      });
+
+      // 3️⃣ Show dialog with personal ID
+      await showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text("Signup Successful 🎉"),
+          content: Text(
+              "Welcome $name!\n\nYour ID is: $personalId\n\nPlease use this ID when logging in."),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text("OK"),
+            ),
+          ],
+        ),
+      );
+
+      // 4️⃣ Redirect to appropriate dashboard
+>>>>>>> 4685f151cb62db19ed2c4d165ee7db2582cd4f02
       if (selectedRole == "Doctor") {
         Navigator.pushReplacement(
           context,
@@ -75,6 +157,7 @@ class _SignupPageState extends State<SignupPage> {
       } else {
         Navigator.pushReplacement(
           context,
+<<<<<<< HEAD
           MaterialPageRoute(builder: (context) => DashboardScreen()),
         );
       }
@@ -86,6 +169,18 @@ class _SignupPageState extends State<SignupPage> {
       ).showSnackBar(SnackBar(content: Text("Signup failed: ${e.message}")));
     } catch (e) {
       print("❌ Unexpected error: $e");
+=======
+          MaterialPageRoute(builder: (context) => const PatientDashboard()),
+        );
+      }
+    } catch (e) {
+      // ⚠️ Rollback: Delete user from Auth if Firestore fails
+      await FirebaseAuth.instance.currentUser?.delete();
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Signup failed: $e")),
+      );
+>>>>>>> 4685f151cb62db19ed2c4d165ee7db2582cd4f02
     } finally {
       setState(() => _isLoading = false);
     }
@@ -136,9 +231,14 @@ class _SignupPageState extends State<SignupPage> {
               ),
               TextField(
                 controller: experienceController,
+<<<<<<< HEAD
                 decoration: const InputDecoration(
                   labelText: "Experience (Years)",
                 ),
+=======
+                decoration:
+                    const InputDecoration(labelText: "Experience (Years)"),
+>>>>>>> 4685f151cb62db19ed2c4d165ee7db2582cd4f02
               ),
             ],
             const SizedBox(height: 20),

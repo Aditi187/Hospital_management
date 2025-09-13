@@ -73,6 +73,7 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.19.1"
+<<<<<<< HEAD
   cross_file:
     dependency: transitive
     description:
@@ -81,6 +82,8 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.3.4+2"
+=======
+>>>>>>> 4685f151cb62db19ed2c4d165ee7db2582cd4f02
   crypto:
     dependency: transitive
     description:
@@ -137,6 +140,7 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "7.0.1"
+<<<<<<< HEAD
   file_selector_linux:
     dependency: transitive
     description:
@@ -169,6 +173,8 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.9.3+4"
+=======
+>>>>>>> 4685f151cb62db19ed2c4d165ee7db2582cd4f02
   firebase_auth:
     dependency: "direct main"
     description:
@@ -217,6 +223,7 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.24.1"
+<<<<<<< HEAD
   firebase_storage:
     dependency: "direct main"
     description:
@@ -241,6 +248,8 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "3.10.17"
+=======
+>>>>>>> 4685f151cb62db19ed2c4d165ee7db2582cd4f02
   flutter:
     dependency: "direct main"
     description: flutter
@@ -259,6 +268,7 @@ packages:
     description: flutter
     source: sdk
     version: "0.0.0"
+<<<<<<< HEAD
   flutter_plugin_android_lifecycle:
     dependency: transitive
     description:
@@ -267,6 +277,8 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.0.30"
+=======
+>>>>>>> 4685f151cb62db19ed2c4d165ee7db2582cd4f02
   flutter_test:
     dependency: "direct dev"
     description: flutter
@@ -317,6 +329,7 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "4.1.2"
+<<<<<<< HEAD
   image_picker:
     dependency: "direct main"
     description:
@@ -381,6 +394,8 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.2.2"
+=======
+>>>>>>> 4685f151cb62db19ed2c4d165ee7db2582cd4f02
   intl:
     dependency: "direct main"
     description:
@@ -453,6 +468,7 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.16.0"
+<<<<<<< HEAD
   mime:
     dependency: transitive
     description:
@@ -461,6 +477,8 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.0.0"
+=======
+>>>>>>> 4685f151cb62db19ed2c4d165ee7db2582cd4f02
   nested:
     dependency: transitive
     description:
@@ -716,4 +734,8 @@ packages:
     version: "1.1.0"
 sdks:
   dart: ">=3.9.0 <4.0.0"
+<<<<<<< HEAD
   flutter: ">=3.35.0"
+=======
+  flutter: ">=3.32.0"
+>>>>>>> 4685f151cb62db19ed2c4d165ee7db2582cd4f02
