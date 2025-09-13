@@ -3,11 +3,15 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
-import 'dart:html' as html;
-import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'settings_page.dart';
-import 'services/firestore_service.dart';
+import '../services/firestore_service.dart';
+import '../services/auth_service.dart';
+
+// Conditional import for web functionality
+import 'dart:html'
+    as html
+    show FileUploadInputElement, FileReader, Blob, Url, AnchorElement;
 
 // Abstract base class for profile sections
 abstract class ProfileSection {
@@ -60,6 +64,7 @@ class PersonalInformationSection extends ProfileSection {
             ),
             const SizedBox(height: 12),
             _buildInfoRow('Name', userData['name'] ?? 'N/A'),
+            _buildInfoRow('Age', userData['age']?.toString() ?? 'N/A'),
             _buildInfoRow('Date of Birth', userData['dateOfBirth'] ?? 'N/A'),
             _buildInfoRow('Gender', userData['gender'] ?? 'N/A'),
             _buildInfoRow('Phone', userData['phone'] ?? 'N/A'),
@@ -99,6 +104,9 @@ class PersonalInformationSection extends ProfileSection {
     VoidCallback onUpdate,
   ) {
     final nameController = TextEditingController(text: userData['name'] ?? '');
+    final ageController = TextEditingController(
+      text: userData['age']?.toString() ?? '',
+    );
     final dobController = TextEditingController(
       text: userData['dateOfBirth'] ?? '',
     );
@@ -124,6 +132,12 @@ class PersonalInformationSection extends ProfileSection {
               TextField(
                 controller: nameController,
                 decoration: const InputDecoration(labelText: 'Full Name'),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: ageController,
+                decoration: const InputDecoration(labelText: 'Age'),
+                keyboardType: TextInputType.number,
               ),
               const SizedBox(height: 16),
               TextField(
@@ -179,6 +193,7 @@ class PersonalInformationSection extends ProfileSection {
                     .doc(user.uid)
                     .update({
                       'name': nameController.text,
+                      'age': int.tryParse(ageController.text) ?? 0,
                       'dateOfBirth': dobController.text,
                       'gender': selectedGender,
                       'phone': phoneController.text,
@@ -833,6 +848,33 @@ class _ProfilePageState extends State<ProfilePage> {
                                       fontSize: 12,
                                     ),
                                   ),
+                                  if (!user.emailVerified) ...[
+                                    const SizedBox(width: 8),
+                                    GestureDetector(
+                                      onTap: () =>
+                                          _sendVerificationEmail(context),
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 6,
+                                          vertical: 2,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: Colors.blue,
+                                          borderRadius: BorderRadius.circular(
+                                            10,
+                                          ),
+                                        ),
+                                        child: const Text(
+                                          'Verify',
+                                          style: TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ],
                               ),
                             ],
@@ -843,6 +885,82 @@ class _ProfilePageState extends State<ProfilePage> {
                   ),
                 ),
                 const SizedBox(height: 16),
+
+                // Email Verification Banner (only show if not verified)
+                if (!user.emailVerified)
+                  Card(
+                    color: Colors.amber.shade50,
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        children: [
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.warning_amber,
+                                color: Colors.amber.shade700,
+                                size: 24,
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Email Verification Required',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.amber.shade800,
+                                        fontSize: 16,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      'Please verify your email to access all features and secure your account.',
+                                      style: TextStyle(
+                                        color: Colors.amber.shade700,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: ElevatedButton.icon(
+                                  onPressed: () =>
+                                      _showVerificationDialog(context),
+                                  icon: const Icon(Icons.email),
+                                  label: const Text('Verify Email'),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.amber.shade600,
+                                    foregroundColor: Colors.white,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              OutlinedButton(
+                                onPressed: () =>
+                                    _checkVerificationStatus(context),
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: Colors.amber.shade700,
+                                  side: BorderSide(
+                                    color: Colors.amber.shade600,
+                                  ),
+                                ),
+                                child: const Text('Refresh'),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                if (!user.emailVerified) const SizedBox(height: 16),
 
                 // Quick Stats Card
                 Card(
@@ -868,9 +986,9 @@ class _ProfilePageState extends State<ProfilePage> {
                               Icons.calendar_today,
                             ),
                             _buildStatColumn(
-                              'Last Login',
-                              _formatLastLogin(userData['lastLogin']),
-                              Icons.access_time,
+                              'Medicine Orders',
+                              '${userData['totalMedicineOrders'] ?? 0}',
+                              Icons.medication,
                             ),
                             _buildStatColumn(
                               'Profile',
@@ -912,6 +1030,16 @@ class _ProfilePageState extends State<ProfilePage> {
                           ),
                         ),
                         const SizedBox(height: 12),
+                        if (!user.emailVerified)
+                          ListTile(
+                            leading: const Icon(
+                              Icons.verified_user,
+                              color: Colors.blue,
+                            ),
+                            title: const Text('Verify Email'),
+                            subtitle: const Text('Required for full access'),
+                            onTap: () => _showVerificationDialog(context),
+                          ),
                         ListTile(
                           leading: const Icon(
                             Icons.security,
@@ -960,22 +1088,6 @@ class _ProfilePageState extends State<ProfilePage> {
         Text(label, style: TextStyle(fontSize: 12, color: Colors.grey[600])),
       ],
     );
-  }
-
-  String _formatLastLogin(String? lastLogin) {
-    if (lastLogin == null || lastLogin.isEmpty) return 'N/A';
-    try {
-      final date = DateTime.parse(lastLogin);
-      final now = DateTime.now();
-      final difference = now.difference(date).inDays;
-      if (difference == 0) return 'Today';
-      if (difference == 1) return 'Yesterday';
-      if (difference < 30) return '${difference}d ago';
-      if (difference < 365) return '${(difference / 30).floor()}m ago';
-      return '${(difference / 365).floor()}y ago';
-    } catch (e) {
-      return lastLogin;
-    }
   }
 
   int _calculateProfileCompletion(Map<String, dynamic> userData) {
@@ -1347,6 +1459,158 @@ class _ProfilePageState extends State<ProfilePage> {
               }
             },
             child: const Text('Logout'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Email verification methods
+  Future<void> _sendVerificationEmail(BuildContext context) async {
+    try {
+      final authService = AuthService();
+      final result = await authService.resendVerificationEmail();
+
+      if (result['success']) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(result['message']),
+              backgroundColor: Colors.green,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        }
+      } else {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(result['message']),
+              backgroundColor: Colors.orange,
+              duration: Duration(seconds: result['cooldown'] ?? 3),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error sending verification email: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _checkVerificationStatus(BuildContext context) async {
+    try {
+      final authService = AuthService();
+      final isVerified = await authService.isEmailVerified();
+
+      if (isVerified) {
+        // Update verification status in Firestore
+        await authService.updateVerificationStatus(true);
+
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Email verified successfully!'),
+              backgroundColor: Colors.green,
+            ),
+          );
+
+          // Refresh the profile to update UI
+          setState(() {});
+        }
+      } else {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Email not yet verified. Please check your inbox.'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error checking verification status: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  void _showVerificationDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.email, color: Colors.blue),
+            SizedBox(width: 8),
+            Text('Email Verification'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Your email address is not verified. Please verify your email to:',
+              style: TextStyle(fontSize: 14),
+            ),
+            const SizedBox(height: 12),
+            const Text('• Access all features'),
+            const Text('• Secure your account'),
+            const Text('• Receive important notifications'),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.blue.shade50,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.blue.shade200),
+              ),
+              child: const Row(
+                children: [
+                  Icon(Icons.info, color: Colors.blue, size: 20),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Check your inbox and click the verification link.',
+                      style: TextStyle(fontSize: 12, color: Colors.blue),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Later'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              await _sendVerificationEmail(context);
+            },
+            child: const Text('Send Email'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              await _checkVerificationStatus(context);
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+            child: const Text('I\'ve Verified'),
           ),
         ],
       ),

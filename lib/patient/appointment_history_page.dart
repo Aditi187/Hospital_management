@@ -35,6 +35,7 @@ class _AppointmentHistoryPageState extends State<AppointmentHistoryPage> {
       );
     }
   }
+
   @override
   Widget build(BuildContext context) {
     final User? currentUser = FirebaseAuth.instance.currentUser;
@@ -64,6 +65,9 @@ class _AppointmentHistoryPageState extends State<AppointmentHistoryPage> {
             onPressed: () => _clearMyAppointments(context, currentUser.uid),
           ),
         ],
+      ),
+      body: Column(
+        children: [
           // Main content
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
@@ -729,7 +733,9 @@ class _AppointmentHistoryPageState extends State<AppointmentHistoryPage> {
                     ],
                   ),
                   const SizedBox(height: 8),
-                  ...((medicineReport['prescriptions'] as List<dynamic>).map((prescription) {
+                  ...((medicineReport['prescriptions'] as List<dynamic>).map((
+                    prescription,
+                  ) {
                     final med = prescription as Map<String, dynamic>;
                     return Container(
                       margin: const EdgeInsets.only(bottom: 12),
@@ -737,9 +743,7 @@ class _AppointmentHistoryPageState extends State<AppointmentHistoryPage> {
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(8),
-                        border: Border.all(
-                          color: Colors.teal.shade200,
-                        ),
+                        border: Border.all(color: Colors.teal.shade200),
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -759,7 +763,10 @@ class _AppointmentHistoryPageState extends State<AppointmentHistoryPage> {
                           if (med['duration'] != null)
                             _buildMedicineDetail('Duration', med['duration']),
                           if (med['instructions'] != null)
-                            _buildMedicineDetail('Instructions', med['instructions']),
+                            _buildMedicineDetail(
+                              'Instructions',
+                              med['instructions'],
+                            ),
                         ],
                       ),
                     );
@@ -852,7 +859,6 @@ class _AppointmentHistoryPageState extends State<AppointmentHistoryPage> {
   }
 
   // ...existing code...
-
 
   Widget _buildFeedbackSection(
     BuildContext context,
@@ -1574,4 +1580,3 @@ class _AppointmentHistoryPageState extends State<AppointmentHistoryPage> {
     }
   }
 }
-

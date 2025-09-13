@@ -29,11 +29,8 @@ dependencies:
   # UI widgets
   table_calendar: ^3.1.2
   device_preview: ^1.3.1
-<<<<<<< HEAD
   image_picker: ^1.0.7
   firebase_storage: ^12.0.0
-=======
->>>>>>> 4685f151cb62db19ed2c4d165ee7db2582cd4f02
 
 dev_dependencies:
   flutter_test:
@@ -42,9 +39,3 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
-<<<<<<< HEAD
-=======
-  assets:
-    - assets/images/
-    - assets/icons/
->>>>>>> 4685f151cb62db19ed2c4d165ee7db2582cd4f02
