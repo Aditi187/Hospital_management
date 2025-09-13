@@ -1,0 +1,41 @@
+name: hospital_management
+description: "Hospital Management System built with Flutter and Firebase"
+publish_to: 'none' 
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.9.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  cupertino_icons: ^1.0.8
+
+  # Firebase dependencies
+  firebase_core: ^3.15.2
+  firebase_auth: ^5.7.0
+  cloud_firestore: ^5.4.4
+
+  # State management
+  provider: ^6.1.2
+
+  # Utilities
+  intl: ^0.20.1
+  google_fonts: ^6.2.1
+  fluttertoast: ^8.2.4
+
+  # UI widgets
+  table_calendar: ^3.1.2
+  device_preview: ^1.3.1
+  image_picker: ^1.0.7
+  firebase_storage: ^12.0.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true
