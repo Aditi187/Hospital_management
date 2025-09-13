@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'medicine_ordering_page.dart';
+import 'services/firestore_service.dart';
 
 class MedicalReportsPage extends StatefulWidget {
   const MedicalReportsPage({Key? key}) : super(key: key);
@@ -19,7 +19,7 @@ class _MedicalReportsPageState extends State<MedicalReportsPage> {
     }
 
     return DefaultTabController(
-      length: 2,
+      length: 3,
       child: Scaffold(
         appBar: AppBar(
           title: const Text('Medical Reports'),
@@ -32,6 +32,7 @@ class _MedicalReportsPageState extends State<MedicalReportsPage> {
             tabs: [
               Tab(icon: Icon(Icons.medical_services), text: 'Medical Records'),
               Tab(icon: Icon(Icons.medication), text: 'Prescriptions'),
+              Tab(icon: Icon(Icons.shopping_cart), text: 'Medicine Orders'),
             ],
           ),
           actions: [
@@ -46,6 +47,7 @@ class _MedicalReportsPageState extends State<MedicalReportsPage> {
           children: [
             _buildMedicalRecordsTab(user.uid),
             _buildPrescriptionsTab(user.uid),
+            _buildMedicineOrdersTab(user.uid),
           ],
         ),
       ),
@@ -55,6 +57,76 @@ class _MedicalReportsPageState extends State<MedicalReportsPage> {
   Widget _buildMedicalRecordsTab(String userId) {
     return Column(
       children: [
+        // Medical History Summary Section
+        StreamBuilder<DocumentSnapshot>(
+          stream: FirebaseFirestore.instance
+              .collection('users')
+              .doc(userId)
+              .snapshots(),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Padding(
+                padding: EdgeInsets.all(24),
+                child: Center(child: CircularProgressIndicator()),
+              );
+            }
+            if (!snapshot.hasData || !snapshot.data!.exists) {
+              return const Padding(
+                padding: EdgeInsets.all(24),
+                child: Text('No medical history found.'),
+              );
+            }
+            final data = snapshot.data!.data() as Map<String, dynamic>;
+            final medicalHistory = data['medicalHistory'] ?? {};
+            return Card(
+              margin: const EdgeInsets.all(16),
+              elevation: 4,
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.history, color: Colors.purple, size: 28),
+                        const SizedBox(width: 12),
+                        const Text(
+                          'Medical History Summary',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.purple,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    _buildInfoRow(
+                      'Blood Type',
+                      medicalHistory['bloodType'] ?? 'N/A',
+                    ),
+                    _buildInfoRow(
+                      'Allergies',
+                      medicalHistory['allergies'] ?? 'None reported',
+                    ),
+                    _buildInfoRow(
+                      'Conditions',
+                      medicalHistory['conditions'] ?? 'None reported',
+                    ),
+                    _buildInfoRow(
+                      'Current Medications',
+                      medicalHistory['medications'] ?? 'None reported',
+                    ),
+                    _buildInfoRow(
+                      'Last Visit',
+                      medicalHistory['lastVisit'] ?? 'N/A',
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        ),
         // Medical Records List
         Expanded(
           child: StreamBuilder<QuerySnapshot>(
@@ -242,12 +314,7 @@ class _MedicalReportsPageState extends State<MedicalReportsPage> {
                     const SizedBox(height: 12),
                     if (data['status'] == 'Prescribed')
                       ElevatedButton.icon(
-                        onPressed: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => const MedicineOrderingPage(),
-                          ),
-                        ),
+                        onPressed: () => _orderMedicine(prescription.id, data),
                         icon: const Icon(Icons.shopping_cart),
                         label: const Text('Order Medicine'),
                         style: ElevatedButton.styleFrom(
@@ -255,6 +322,116 @@ class _MedicalReportsPageState extends State<MedicalReportsPage> {
                           foregroundColor: Colors.white,
                         ),
                       ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildMedicineOrdersTab(String userId) {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('medicine_orders')
+          .where('patientId', isEqualTo: userId)
+          .orderBy('orderDate', descending: true)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+          return const Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.shopping_cart, size: 80, color: Colors.grey),
+                SizedBox(height: 16),
+                Text('No medicine orders found'),
+                SizedBox(height: 8),
+                Text(
+                  'Orders will appear here when you order medicines from prescriptions',
+                  style: TextStyle(color: Colors.grey),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          );
+        }
+
+        final orders = snapshot.data!.docs;
+
+        return ListView.builder(
+          padding: const EdgeInsets.all(16),
+          itemCount: orders.length,
+          itemBuilder: (context, index) {
+            final order = orders[index];
+            final data = order.data() as Map<String, dynamic>;
+
+            return Card(
+              margin: const EdgeInsets.only(bottom: 16),
+              elevation: 3,
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.shopping_cart, color: Colors.orange),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            data['medicineName'] ?? 'Medicine Order',
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: _getOrderStatusColor(data['status']),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            data['status'] ?? 'Pending',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    _buildInfoRow('Medicine', data['medicineName'] ?? 'N/A'),
+                    _buildInfoRow(
+                      'Quantity',
+                      data['quantity']?.toString() ?? 'N/A',
+                    ),
+                    _buildInfoRow(
+                      'Delivery Address',
+                      data['deliveryAddress'] ?? 'N/A',
+                    ),
+                    _buildInfoRow('Contact', data['contactNumber'] ?? 'N/A'),
+                    _buildInfoRow('Order Date', _formatDate(data['orderDate'])),
+                    if (data['estimatedDelivery'] != null)
+                      _buildInfoRow(
+                        'Estimated Delivery',
+                        _formatDate(data['estimatedDelivery']),
+                      ),
+                    if (data['trackingNumber'] != null)
+                      _buildInfoRow('Tracking Number', data['trackingNumber']),
                   ],
                 ),
               ),
@@ -309,6 +486,110 @@ class _MedicalReportsPageState extends State<MedicalReportsPage> {
     );
   }
 
+  void _orderMedicine(
+    String prescriptionId,
+    Map<String, dynamic> prescriptionData,
+  ) {
+    final quantityController = TextEditingController(text: '1');
+    final addressController = TextEditingController();
+    final contactController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Order ${prescriptionData['medicineName']}'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: quantityController,
+                decoration: const InputDecoration(
+                  labelText: 'Quantity',
+                  hintText: 'Enter quantity needed',
+                ),
+                keyboardType: TextInputType.number,
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: addressController,
+                decoration: const InputDecoration(
+                  labelText: 'Delivery Address',
+                  hintText: 'Enter delivery address',
+                ),
+                maxLines: 2,
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: contactController,
+                decoration: const InputDecoration(
+                  labelText: 'Contact Number',
+                  hintText: 'Enter contact number',
+                ),
+                keyboardType: TextInputType.phone,
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final user = FirebaseAuth.instance.currentUser;
+              if (user != null) {
+                final orderData = {
+                  'patientId': user.uid,
+                  'prescriptionId': prescriptionId,
+                  'medicineName': prescriptionData['medicineName'],
+                  'dosage': prescriptionData['dosage'],
+                  'quantity': int.tryParse(quantityController.text) ?? 1,
+                  'deliveryAddress': addressController.text.trim(),
+                  'contactNumber': contactController.text.trim(),
+                  'status': 'Ordered',
+                  'orderDate': FieldValue.serverTimestamp(),
+                  'estimatedDelivery': DateTime.now().add(
+                    const Duration(days: 3),
+                  ),
+                };
+
+                try {
+                  await FirebaseFirestore.instance
+                      .collection('medicine_orders')
+                      .add(orderData);
+
+                  // Update prescription status
+                  await FirebaseFirestore.instance
+                      .collection('prescriptions')
+                      .doc(prescriptionId)
+                      .update({'status': 'Ordered'});
+
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Medicine ordered successfully'),
+                      backgroundColor: Colors.green,
+                    ),
+                  );
+                } catch (e) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Error ordering medicine: $e'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+              }
+            },
+            child: const Text('Order'),
+          ),
+        ],
+      ),
+    );
+  }
+
   String _formatDate(dynamic timestamp) {
     if (timestamp == null) return 'N/A';
 
@@ -341,6 +622,23 @@ class _MedicalReportsPageState extends State<MedicalReportsPage> {
         return Colors.grey;
       default:
         return Colors.blue;
+    }
+  }
+
+  Color _getOrderStatusColor(String? status) {
+    switch (status?.toLowerCase()) {
+      case 'ordered':
+        return Colors.orange;
+      case 'processing':
+        return Colors.blue;
+      case 'shipped':
+        return Colors.purple;
+      case 'delivered':
+        return Colors.green;
+      case 'cancelled':
+        return Colors.red;
+      default:
+        return Colors.orange;
     }
   }
 

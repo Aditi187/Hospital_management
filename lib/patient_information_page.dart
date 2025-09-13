@@ -23,20 +23,69 @@ class PatientDemographics extends PatientInformationComponent {
 
   @override
   Widget buildContent(BuildContext context, Map<String, dynamic> data) {
+    final user = FirebaseAuth.instance.currentUser;
     return Column(
       children: [
-        _buildInfoRow('Full Name', data['fullName'] ?? 'Not provided'),
-        _buildInfoRow('Date of Birth', data['dateOfBirth'] ?? 'Not provided'),
-        _buildInfoRow('Gender', data['gender'] ?? 'Not provided'),
-        _buildInfoRow('Blood Type', data['bloodType'] ?? 'Not provided'),
-        _buildInfoRow('Phone Number', data['phoneNumber'] ?? 'Not provided'),
-        _buildInfoRow('Email', data['email'] ?? 'Not provided'),
-        _buildInfoRow('Address', data['address'] ?? 'Not provided'),
+        _buildEditableInfoRow(
+          context,
+          user,
+          'Full Name',
+          'fullName',
+          data['fullName'] ?? 'Not provided',
+        ),
+        _buildEditableInfoRow(
+          context,
+          user,
+          'Date of Birth',
+          'dateOfBirth',
+          data['dateOfBirth'] ?? 'Not provided',
+        ),
+        _buildEditableInfoRow(
+          context,
+          user,
+          'Gender',
+          'gender',
+          data['gender'] ?? 'Not provided',
+        ),
+        _buildEditableInfoRow(
+          context,
+          user,
+          'Blood Type',
+          'bloodType',
+          data['bloodType'] ?? 'Not provided',
+        ),
+        _buildEditableInfoRow(
+          context,
+          user,
+          'Phone Number',
+          'phoneNumber',
+          data['phoneNumber'] ?? 'Not provided',
+        ),
+        _buildEditableInfoRow(
+          context,
+          user,
+          'Email',
+          'email',
+          data['email'] ?? 'Not provided',
+        ),
+        _buildEditableInfoRow(
+          context,
+          user,
+          'Address',
+          'address',
+          data['address'] ?? 'Not provided',
+        ),
       ],
     );
   }
 
-  Widget _buildInfoRow(String label, String value) {
+  Widget _buildEditableInfoRow(
+    BuildContext context,
+    User? user,
+    String label,
+    String field,
+    String value,
+  ) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
@@ -57,6 +106,57 @@ class PatientDemographics extends PatientInformationComponent {
               value,
               style: const TextStyle(fontWeight: FontWeight.w500),
             ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.edit, size: 18, color: Colors.teal),
+            tooltip: 'Edit $label',
+            onPressed: user == null
+                ? null
+                : () => _showEditDialog(context, user, label, field, value),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showEditDialog(
+    BuildContext context,
+    User user,
+    String label,
+    String field,
+    String currentValue,
+  ) {
+    final controller = TextEditingController(text: currentValue);
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Edit $label'),
+        content: TextField(
+          controller: controller,
+          decoration: InputDecoration(labelText: label),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final newValue = controller.text.trim();
+              if (newValue.isEmpty) return;
+              await FirebaseFirestore.instance
+                  .collection('patient_information')
+                  .doc(user.uid)
+                  .update({field: newValue});
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('$label updated!'),
+                  backgroundColor: Colors.green,
+                ),
+              );
+            },
+            child: const Text('Save'),
           ),
         ],
       ),

@@ -1573,4 +1573,5 @@ class _AppointmentHistoryPageState extends State<AppointmentHistoryPage> {
         return Colors.orange;
     }
   }
+}
 

@@ -4,11 +4,12 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'doctor_consultation_page.dart';
 import 'appointment_history_page_fixed.dart';
-import 'medical_reports_page.dart';
 import 'patient_information_page.dart';
 import 'profile_page.dart';
 import 'settings_page.dart';
 import 'help_support_page.dart';
+import 'medical_reports_page.dart';
+import 'medicine_ordering_page.dart';
 
 // Abstract Base Class for Dashboard Features (Abstraction)
 abstract class DashboardFeature {
@@ -102,36 +103,6 @@ class DoctorConsultationFeature extends DashboardFeature with NavigationMixin {
 }
 
 // Medical Records Feature (Inheritance)
-class MedicalRecordsFeature extends DashboardFeature with NavigationMixin {
-  @override
-  String get title => "Medical Records";
-
-  @override
-  IconData get icon => Icons.folder_special;
-
-  @override
-  Color get primaryColor => Colors.blue;
-
-  @override
-  Color get secondaryColor => Colors.blue.shade100;
-
-  @override
-  String get description => "View your health records";
-
-  @override
-  List<String> get subFeatures => ["Lab Reports", "Prescriptions", "History"];
-
-  @override
-  Widget buildCard(BuildContext context) {
-    return ModernDashboardCard(feature: this);
-  }
-
-  @override
-  void onTap(BuildContext context) {
-    navigateToPage(context, const MedicalReportsPage());
-  }
-}
-
 // Order Medicines Feature
 class OrderMedicinesFeature extends DashboardFeature with NavigationMixin {
   @override
@@ -151,9 +122,9 @@ class OrderMedicinesFeature extends DashboardFeature with NavigationMixin {
 
   @override
   List<String> get subFeatures => [
-    "Prescription Upload",
-    "Find Hospital",
-    "Quick Order",
+    "View Prescriptions",
+    "Order Medicines",
+    "Track Orders",
   ];
 
   @override
@@ -163,17 +134,7 @@ class OrderMedicinesFeature extends DashboardFeature with NavigationMixin {
 
   @override
   void onTap(BuildContext context) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: const Text('Medicine ordering feature coming soon!'),
-        backgroundColor: primaryColor,
-        action: SnackBarAction(
-          label: 'OK',
-          textColor: Colors.white,
-          onPressed: () {},
-        ),
-      ),
-    );
+    navigateToPage(context, const MedicineOrderingPage());
   }
 }
 
@@ -231,7 +192,6 @@ class PatientInformationFeature extends DashboardFeature with NavigationMixin {
     "Personal Info",
     "Emergency Contacts",
     "Insurance Details",
-    "Medical History",
   ];
 
   @override
@@ -242,6 +202,42 @@ class PatientInformationFeature extends DashboardFeature with NavigationMixin {
   @override
   void onTap(BuildContext context) {
     navigateToPage(context, const PatientInformationPage());
+  }
+}
+
+// Medical Records Feature (Inheritance)
+class MedicalRecordsFeature extends DashboardFeature with NavigationMixin {
+  @override
+  String get title => "Medical Records";
+
+  @override
+  IconData get icon => Icons.description;
+
+  @override
+  Color get primaryColor => Colors.teal;
+
+  @override
+  Color get secondaryColor => Colors.teal.shade100;
+
+  @override
+  String get description => "View records prescribed by doctors";
+
+  @override
+  List<String> get subFeatures => [
+    "Prescription History",
+    "Lab Reports",
+    "Doctor Notes",
+    "Treatment Plans",
+  ];
+
+  @override
+  Widget buildCard(BuildContext context) {
+    return ModernDashboardCard(feature: this);
+  }
+
+  @override
+  void onTap(BuildContext context) {
+    navigateToPage(context, const MedicalReportsPage());
   }
 }
 
@@ -413,7 +409,449 @@ class _ModernDashboardCardState extends State<ModernDashboardCard>
   }
 }
 
-// User Profile Widget (Composition)
+// Health Stats Section - Shows basic health info from Firestore
+class HealthStatsSection extends StatefulWidget {
+  const HealthStatsSection({Key? key}) : super(key: key);
+
+  @override
+  State<HealthStatsSection> createState() => _HealthStatsSectionState();
+}
+
+class _HealthStatsSectionState extends State<HealthStatsSection> {
+  Map<String, dynamic> healthInfo = {};
+  bool isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadHealthData();
+  }
+
+  void _loadHealthData() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      try {
+        final doc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .get();
+
+        if (doc.exists && mounted) {
+          setState(() {
+            healthInfo = doc.data()?['basicHealthInfo'] ?? {};
+            isLoading = false;
+          });
+        }
+      } catch (e) {
+        if (mounted) {
+          setState(() {
+            isLoading = false;
+          });
+        }
+      }
+    }
+  }
+
+  void _editIndividualStat(String label, String currentValue) {
+    final controller = TextEditingController(
+      text: currentValue == 'Not Set' ? '' : currentValue,
+    );
+
+    // Determine field type and validation
+    String fieldKey = '';
+    String hintText = '';
+    TextInputType inputType = TextInputType.text;
+    List<String>? dropdownOptions;
+
+    switch (label) {
+      case 'Blood Group':
+        fieldKey = 'bloodGroup';
+        hintText = 'Select your blood group';
+        dropdownOptions = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
+        break;
+      case 'Weight':
+        fieldKey = 'weight';
+        hintText = 'e.g., 70 kg';
+        inputType = TextInputType.text;
+        break;
+      case 'Height':
+        fieldKey = 'height';
+        hintText = 'e.g., 175 cm';
+        inputType = TextInputType.text;
+        break;
+      default:
+        return;
+    }
+
+    String? selectedValue =
+        (dropdownOptions != null && dropdownOptions.contains(currentValue))
+        ? currentValue
+        : null;
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text('Edit $label'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (dropdownOptions != null) ...[
+                DropdownButtonFormField<String>(
+                  value: selectedValue,
+                  decoration: InputDecoration(
+                    labelText: label,
+                    hintText: hintText,
+                    border: const OutlineInputBorder(),
+                    prefixIcon: Icon(_getIconForField(fieldKey)),
+                  ),
+                  items: dropdownOptions.map((String option) {
+                    return DropdownMenuItem<String>(
+                      value: option,
+                      child: Text(option),
+                    );
+                  }).toList(),
+                  onChanged: (String? newValue) {
+                    setDialogState(() {
+                      selectedValue = newValue;
+                      controller.text = newValue ?? '';
+                    });
+                  },
+                ),
+              ] else ...[
+                TextField(
+                  controller: controller,
+                  decoration: InputDecoration(
+                    labelText: label,
+                    hintText: hintText,
+                    border: const OutlineInputBorder(),
+                    prefixIcon: Icon(_getIconForField(fieldKey)),
+                  ),
+                  keyboardType: inputType,
+                ),
+              ],
+              const SizedBox(height: 16),
+              if (fieldKey == 'weight' || fieldKey == 'height')
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.blue.shade200),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.info, size: 16, color: Colors.blue.shade600),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          fieldKey == 'weight'
+                              ? 'Include unit (e.g., kg, lbs)'
+                              : 'Include unit (e.g., cm, ft)',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.blue.shade600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                String newValue = controller.text.trim();
+
+                if (dropdownOptions != null) {
+                  newValue = selectedValue ?? '';
+                }
+
+                if (_validateInput(fieldKey, newValue)) {
+                  await _updateHealthStat(fieldKey, newValue);
+                  Navigator.pop(context);
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.teal,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Save'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  IconData _getIconForField(String fieldKey) {
+    switch (fieldKey) {
+      case 'bloodGroup':
+        return Icons.bloodtype;
+      case 'weight':
+        return Icons.monitor_weight;
+      case 'height':
+        return Icons.height;
+      default:
+        return Icons.edit;
+    }
+  }
+
+  bool _validateInput(String fieldKey, String value) {
+    if (value.isEmpty) {
+      _showErrorSnackBar('Please enter a value');
+      return false;
+    }
+
+    switch (fieldKey) {
+      case 'weight':
+        if (!RegExp(
+          r'^\d+(\.\d+)?\s*(kg|kgs?|lb|lbs?|pounds?)?$',
+          caseSensitive: false,
+        ).hasMatch(value)) {
+          _showErrorSnackBar(
+            'Please enter weight in valid format (e.g., 70 kg)',
+          );
+          return false;
+        }
+        break;
+      case 'height':
+        if (!RegExp(
+          r'^\d+(\.\d+)?\s*(cm|cms?|ft|feet|in|inch|inches)?$',
+          caseSensitive: false,
+        ).hasMatch(value)) {
+          _showErrorSnackBar(
+            'Please enter height in valid format (e.g., 175 cm)',
+          );
+          return false;
+        }
+        break;
+    }
+    return true;
+  }
+
+  Future<void> _updateHealthStat(String fieldKey, String value) async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+
+      // Update local state first for immediate UI feedback
+      setState(() {
+        healthInfo[fieldKey] = value;
+      });
+
+      // Update in Firestore
+      await FirebaseFirestore.instance.collection('users').doc(user.uid).update(
+        {'basicHealthInfo.$fieldKey': value},
+      );
+
+      _showSuccessSnackBar('Health information updated successfully');
+    } catch (e) {
+      // Revert local state on error
+      _loadHealthData();
+      _showErrorSnackBar('Failed to update: $e');
+    }
+  }
+
+  void _showSuccessSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.green,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  void _showErrorSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  void _editHealthInfo() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const ProfilePage()),
+    ).then((_) => _loadHealthData()); // Refresh data when returning
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (isLoading) {
+      return Container(
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        child: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Health Quick Stats',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.teal.shade700,
+                ),
+              ),
+              IconButton(
+                onPressed: _editHealthInfo,
+                icon: Icon(Icons.edit, color: Colors.teal.shade600),
+                tooltip: 'Edit Health Info',
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Card(
+            elevation: 4,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(16),
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [Colors.green.shade50, Colors.teal.shade50],
+                ),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: _buildStatCard(
+                      'Blood Group',
+                      healthInfo['bloodGroup'] ?? 'Not Set',
+                      Icons.bloodtype,
+                      Colors.red,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _buildStatCard(
+                      'Weight',
+                      healthInfo['weight'] ?? 'Not Set',
+                      Icons.monitor_weight,
+                      Colors.blue,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _buildStatCard(
+                      'Height',
+                      healthInfo['height'] ?? 'Not Set',
+                      Icons.height,
+                      Colors.purple,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatCard(
+    String label,
+    String value,
+    IconData icon,
+    Color color,
+  ) {
+    return GestureDetector(
+      onTap: () => _editIndividualStat(label, value),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+              color: color.withOpacity(0.1),
+              blurRadius: 8,
+              spreadRadius: 1,
+            ),
+          ],
+          border: Border.all(color: color.withOpacity(0.2), width: 1),
+        ),
+        child: Column(
+          children: [
+            Stack(
+              children: [
+                Icon(icon, color: color, size: 24),
+                Positioned(
+                  right: -2,
+                  top: -2,
+                  child: Container(
+                    padding: const EdgeInsets.all(2),
+                    decoration: BoxDecoration(
+                      color: color,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.edit, color: Colors.white, size: 8),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                color: Colors.grey.shade600,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              value,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+                color: value == 'Not Set'
+                    ? Colors.grey.shade400
+                    : Colors.grey.shade800,
+              ),
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Tap to edit',
+              style: TextStyle(
+                fontSize: 8,
+                color: color.withOpacity(0.7),
+                fontStyle: FontStyle.italic,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class UserProfileSection extends StatefulWidget {
   const UserProfileSection({Key? key}) : super(key: key);
 
@@ -580,10 +1018,10 @@ class _DashboardScreenState extends State<DashboardScreen>
   // List of Dashboard Features (Polymorphism)
   late final List<DashboardFeature> _features = [
     DoctorConsultationFeature(),
-    MedicalRecordsFeature(),
     OrderMedicinesFeature(),
     AppointmentsFeature(),
-    PatientInformationFeature(),
+    MedicalRecordsFeature(),
+    // PatientInformationFeature removed
   ];
 
   @override
@@ -612,6 +1050,9 @@ class _DashboardScreenState extends State<DashboardScreen>
           slivers: [
             // User Profile Section
             SliverToBoxAdapter(child: const UserProfileSection()),
+
+            // Health Stats Section
+            SliverToBoxAdapter(child: const HealthStatsSection()),
 
             // Quick Actions Section
             SliverToBoxAdapter(child: _buildQuickActionsSection()),
@@ -706,7 +1147,7 @@ class _DashboardScreenState extends State<DashboardScreen>
               Navigator.pop(context);
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (context) => const ProfilePage()),
+                MaterialPageRoute(builder: (context) => ProfilePage()),
               );
             }),
             _buildDrawerItem(Icons.settings, 'Settings', () {
@@ -778,14 +1219,10 @@ class _DashboardScreenState extends State<DashboardScreen>
               const SizedBox(width: 12),
               Expanded(
                 child: _buildQuickActionCard(
-                  'Health Profile',
+                  'Health Tips',
                   Icons.favorite,
-                  Colors.pink,
-                  () => ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Health profile feature coming soon!'),
-                    ),
-                  ),
+                  Colors.green,
+                  () => _showHealthTipsDialog(),
                 ),
               ),
             ],
@@ -954,7 +1391,7 @@ class _DashboardScreenState extends State<DashboardScreen>
       builder: (context) => AlertDialog(
         title: const Text('Emergency Call'),
         content: const Text(
-          'In a real emergency, this would call 911 immediately.',
+          'In a real emergency, this would call 118 immediately.',
         ),
         actions: [
           TextButton(
@@ -967,6 +1404,123 @@ class _DashboardScreenState extends State<DashboardScreen>
             child: const Text(
               'Call 118',
               style: TextStyle(color: Colors.white),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showHealthTipsDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.favorite, color: Colors.green),
+            SizedBox(width: 8),
+            Text('Daily Health Tips'),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _buildHealthTip(
+                '💧',
+                'Stay Hydrated',
+                'Drink at least 8 glasses of water daily',
+              ),
+              SizedBox(height: 12),
+              _buildHealthTip(
+                '🏃‍♂️',
+                'Exercise Regularly',
+                '30 minutes of daily activity keeps you healthy',
+              ),
+              SizedBox(height: 12),
+              _buildHealthTip(
+                '😴',
+                'Get Quality Sleep',
+                '7-9 hours of sleep improves your immune system',
+              ),
+              SizedBox(height: 12),
+              _buildHealthTip(
+                '🥗',
+                'Eat Balanced Diet',
+                'Include fruits, vegetables, and whole grains',
+              ),
+              SizedBox(height: 12),
+              _buildHealthTip(
+                '🧘‍♀️',
+                'Manage Stress',
+                'Practice meditation or deep breathing exercises',
+              ),
+              SizedBox(height: 12),
+              _buildHealthTip(
+                '📅',
+                'Regular Checkups',
+                'Schedule routine health screenings',
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              // Could navigate to a dedicated health tips page
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Bookmark these tips for daily reminders!'),
+                  backgroundColor: Colors.green,
+                ),
+              );
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+            child: const Text(
+              'Save Tips',
+              style: TextStyle(color: Colors.white),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHealthTip(String emoji, String title, String description) {
+    return Container(
+      padding: EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.green.shade50,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.green.shade200),
+      ),
+      child: Row(
+        children: [
+          Text(emoji, style: TextStyle(fontSize: 24)),
+          SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Colors.green.shade800,
+                  ),
+                ),
+                SizedBox(height: 4),
+                Text(
+                  description,
+                  style: TextStyle(color: Colors.green.shade700, fontSize: 13),
+                ),
+              ],
             ),
           ),
         ],
