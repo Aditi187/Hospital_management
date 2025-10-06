@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:hospital_management/theme.dart';
 import 'medicine_ordering_page.dart';
 
 class MedicalReportsPage extends StatefulWidget {
@@ -23,13 +24,13 @@ class _MedicalReportsPageState extends State<MedicalReportsPage> {
       child: Scaffold(
         appBar: AppBar(
           title: const Text('Medical Reports'),
-          backgroundColor: Colors.deepPurple,
-          foregroundColor: Colors.white,
-          bottom: const TabBar(
-            labelColor: Colors.white,
-            unselectedLabelColor: Colors.white70,
-            indicatorColor: Colors.white,
-            tabs: [
+          backgroundColor: AppTheme.primary,
+          foregroundColor: AppTheme.onPrimary,
+          bottom: TabBar(
+            labelColor: AppTheme.onPrimary,
+            unselectedLabelColor: AppTheme.onPrimary.withOpacity(0.8),
+            indicatorColor: AppTheme.onPrimary,
+            tabs: const [
               Tab(icon: Icon(Icons.medical_services), text: 'Medical Records'),
               Tab(icon: Icon(Icons.medication), text: 'Prescriptions'),
             ],
@@ -75,7 +76,7 @@ class _MedicalReportsPageState extends State<MedicalReportsPage> {
                       Icon(
                         Icons.medical_services,
                         size: 80,
-                        color: Colors.grey,
+                        color: AppTheme.muted,
                       ),
                       SizedBox(height: 16),
                       Text('No medical records found'),
@@ -114,7 +115,7 @@ class _MedicalReportsPageState extends State<MedicalReportsPage> {
                             children: [
                               Icon(
                                 Icons.medical_services,
-                                color: Colors.deepPurple,
+                                color: AppTheme.primary,
                               ),
                               const SizedBox(width: 8),
                               Expanded(
@@ -129,7 +130,7 @@ class _MedicalReportsPageState extends State<MedicalReportsPage> {
                               Text(
                                 _formatDate(data['timestamp']),
                                 style: TextStyle(
-                                  color: Colors.grey.shade600,
+                                  color: AppTheme.muted,
                                   fontSize: 12,
                                 ),
                               ),
@@ -175,7 +176,7 @@ class _MedicalReportsPageState extends State<MedicalReportsPage> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.medication, size: 80, color: Colors.grey),
+                Icon(Icons.medication, size: 80, color: AppTheme.muted),
                 SizedBox(height: 16),
                 Text('No prescriptions found'),
               ],
@@ -202,7 +203,7 @@ class _MedicalReportsPageState extends State<MedicalReportsPage> {
                   children: [
                     Row(
                       children: [
-                        Icon(Icons.medication, color: Colors.blue),
+                        Icon(Icons.medication, color: AppTheme.primaryVariant),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
@@ -258,8 +259,8 @@ class _MedicalReportsPageState extends State<MedicalReportsPage> {
                         icon: const Icon(Icons.shopping_cart),
                         label: const Text('Order Medicine'),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.green,
-                          foregroundColor: Colors.white,
+                          backgroundColor: AppTheme.primaryVariant,
+                          foregroundColor: AppTheme.onPrimary,
                         ),
                       ),
                   ],
@@ -286,7 +287,7 @@ class _MedicalReportsPageState extends State<MedicalReportsPage> {
             ),
           ),
           Expanded(
-            child: Text(value, style: TextStyle(color: Colors.grey.shade700)),
+            child: Text(value, style: TextStyle(color: AppTheme.muted)),
           ),
         ],
       ),
@@ -339,15 +340,15 @@ class _MedicalReportsPageState extends State<MedicalReportsPage> {
   Color _getStatusColor(String? status) {
     switch (status?.toLowerCase()) {
       case 'prescribed':
-        return Colors.blue;
+        return AppTheme.primaryVariant;
       case 'ordered':
         return Colors.orange;
       case 'dispensed':
-        return Colors.green;
+        return AppTheme.primaryVariant;
       case 'completed':
-        return Colors.grey;
+        return AppTheme.muted;
       default:
-        return Colors.blue;
+        return AppTheme.primaryVariant;
     }
   }
 

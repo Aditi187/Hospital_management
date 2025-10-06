@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'theme.dart';
 
 class DoctorDashboard extends StatefulWidget {
   const DoctorDashboard({super.key});
@@ -9,7 +10,8 @@ class DoctorDashboard extends StatefulWidget {
   State<DoctorDashboard> createState() => _DoctorDashboardState();
 }
 
-class _DoctorDashboardState extends State<DoctorDashboard> with TickerProviderStateMixin {
+class _DoctorDashboardState extends State<DoctorDashboard>
+    with TickerProviderStateMixin {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   String currentDoctorId = '';
   Map<String, dynamic> doctorData = {};
@@ -31,11 +33,17 @@ class _DoctorDashboardState extends State<DoctorDashboard> with TickerProviderSt
       isLoading = true;
     });
     try {
-      final docSnap = await _firestore.collection('doctors').doc(currentDoctorId).get();
+      final docSnap = await _firestore
+          .collection('doctors')
+          .doc(currentDoctorId)
+          .get();
       if (docSnap.exists) {
         doctorData = docSnap.data() ?? {};
       } else {
-        final userSnap = await _firestore.collection('users').doc(currentDoctorId).get();
+        final userSnap = await _firestore
+            .collection('users')
+            .doc(currentDoctorId)
+            .get();
         doctorData = userSnap.exists ? (userSnap.data() ?? {}) : {};
       }
 
@@ -45,10 +53,14 @@ class _DoctorDashboardState extends State<DoctorDashboard> with TickerProviderSt
           .where('doctorId', isEqualTo: currentDoctorId)
           .get();
 
-      final patientIds = apptSnap.docs.map((doc) {
-        final data = doc.data();
-        return data['patientId'] as String?;
-      }).whereType<String>().where((pid) => pid != currentDoctorId).toSet();
+      final patientIds = apptSnap.docs
+          .map((doc) {
+            final data = doc.data();
+            return data['patientId'] as String?;
+          })
+          .whereType<String>()
+          .where((pid) => pid != currentDoctorId)
+          .toSet();
 
       patients = [];
 
@@ -83,14 +95,14 @@ class _DoctorDashboardState extends State<DoctorDashboard> with TickerProviderSt
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey[50],
+      backgroundColor: AppTheme.primaryLight,
       appBar: AppBar(
         title: const Text(
           'Doctor Dashboard',
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
-        backgroundColor: Colors.teal,
-        foregroundColor: Colors.white,
+        backgroundColor: AppTheme.primary,
+        foregroundColor: AppTheme.onPrimary,
         elevation: 0,
         actions: [
           IconButton(
@@ -98,7 +110,9 @@ class _DoctorDashboardState extends State<DoctorDashboard> with TickerProviderSt
             onPressed: () async {
               await FirebaseAuth.instance.signOut();
               if (context.mounted) {
-                Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
+                Navigator.of(
+                  context,
+                ).pushNamedAndRemoveUntil('/', (route) => false);
               }
             },
           ),
@@ -119,7 +133,7 @@ class _DoctorDashboardState extends State<DoctorDashboard> with TickerProviderSt
                     style: TextStyle(
                       fontSize: 22,
                       fontWeight: FontWeight.bold,
-                      color: Colors.teal.shade800,
+                      color: AppTheme.primaryVariant,
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -130,64 +144,78 @@ class _DoctorDashboardState extends State<DoctorDashboard> with TickerProviderSt
                           crossAxisSpacing: 16,
                           mainAxisSpacing: 16,
                           shrinkWrap: true,
-                          physics: const NeverScrollableScrollPhysics(),
                           childAspectRatio: 3,
                           children: List.generate(patients.length, (index) {
                             final patient = patients[index];
-                            final pdata = patient['data'] as Map<String, dynamic>;
+                            final pdata =
+                                patient['data'] as Map<String, dynamic>;
                             final name = pdata['name'] ?? 'Unknown Patient';
                             final email = pdata['email'] ?? '';
                             return InkWell(
                               onTap: () => _showPatientDetailsDialog(patient),
                               borderRadius: BorderRadius.circular(20),
                               child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 12,
+                                ),
                                 decoration: BoxDecoration(
                                   gradient: LinearGradient(
-                                    colors: [Colors.teal.shade50, Colors.teal.shade100],
+                                    colors: [
+                                      AppTheme.surface.withOpacity(0.6),
+                                      AppTheme.primaryLight,
+                                    ],
                                     begin: Alignment.topLeft,
                                     end: Alignment.bottomRight,
                                   ),
                                   borderRadius: BorderRadius.circular(20),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: Colors.teal.shade100.withValues(alpha: 0.5),
+                                      color: AppTheme.primary.withOpacity(0.06),
                                       blurRadius: 8,
                                       offset: const Offset(0, 4),
                                     ),
                                   ],
-                                  border: Border.all(color: Colors.teal.shade200, width: 1.5),
+                                  border: Border.all(
+                                    color: AppTheme.muted.withOpacity(0.08),
+                                    width: 1.5,
+                                  ),
                                 ),
                                 child: Row(
                                   children: [
                                     CircleAvatar(
-                                      backgroundColor: Colors.teal.shade200,
+                                      backgroundColor: AppTheme.primaryVariant
+                                          .withOpacity(0.18),
                                       child: Text(
-                                        name.isNotEmpty ? name[0].toUpperCase() : 'P',
-                                        style: const TextStyle(
+                                        name.isNotEmpty
+                                            ? name[0].toUpperCase()
+                                            : 'P',
+                                        style: TextStyle(
                                           fontWeight: FontWeight.bold,
-                                          color: Colors.white,
+                                          color: AppTheme.onPrimary,
                                         ),
                                       ),
                                     ),
                                     const SizedBox(width: 16),
                                     Expanded(
                                       child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
                                         children: [
                                           Text(
                                             name,
                                             style: TextStyle(
                                               fontWeight: FontWeight.bold,
-                                              color: Colors.teal.shade900,
+                                              color: AppTheme.primaryVariant,
                                               fontSize: 16,
                                             ),
                                           ),
                                           Text(
                                             email,
                                             style: TextStyle(
-                                              color: Colors.teal.shade700,
+                                              color: AppTheme.muted,
                                               fontSize: 12,
                                             ),
                                           ),
@@ -212,14 +240,14 @@ class _DoctorDashboardState extends State<DoctorDashboard> with TickerProviderSt
       padding: const EdgeInsets.all(28),
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [Colors.teal.shade600, Colors.teal.shade400],
+          colors: [AppTheme.primary, AppTheme.primaryVariant],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: Colors.teal.shade600.withValues(alpha: 0.3),
+            color: AppTheme.primary.withOpacity(0.28),
             blurRadius: 20,
             offset: const Offset(0, 10),
             spreadRadius: 3,
@@ -232,7 +260,7 @@ class _DoctorDashboardState extends State<DoctorDashboard> with TickerProviderSt
           Text(
             'Welcome,',
             style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.9),
+              color: AppTheme.onPrimary.withOpacity(0.95),
               fontSize: 24,
               fontWeight: FontWeight.w500,
             ),
@@ -241,7 +269,7 @@ class _DoctorDashboardState extends State<DoctorDashboard> with TickerProviderSt
           Text(
             doctorData['name'] ?? 'Doctor',
             style: const TextStyle(
-              color: Colors.white,
+              color: AppTheme.onPrimary,
               fontSize: 32,
               fontWeight: FontWeight.bold,
               letterSpacing: 0.5,
@@ -251,7 +279,7 @@ class _DoctorDashboardState extends State<DoctorDashboard> with TickerProviderSt
           Text(
             doctorData['email'] ?? '',
             style: TextStyle(
-              color: Colors.white.withOpacity(0.9),
+              color: AppTheme.onPrimary.withOpacity(0.9),
               fontSize: 16,
             ),
           ),
@@ -268,7 +296,7 @@ class _DoctorDashboardState extends State<DoctorDashboard> with TickerProviderSt
           DrawerHeader(
             decoration: BoxDecoration(
               gradient: LinearGradient(
-                colors: [Colors.teal.shade600, Colors.teal.shade400],
+                colors: [AppTheme.primary, AppTheme.primaryVariant],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
@@ -276,43 +304,52 @@ class _DoctorDashboardState extends State<DoctorDashboard> with TickerProviderSt
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const CircleAvatar(
+                CircleAvatar(
                   radius: 30,
                   backgroundColor: Colors.white,
-                  child: Icon(Icons.medical_services, size: 35, color: Colors.teal),
+                  child: Icon(
+                    Icons.medical_services,
+                    size: 35,
+                    color: AppTheme.primary,
+                  ),
                 ),
                 const SizedBox(height: 10),
-                const Text(
+                Text(
                   'Doctor Portal',
                   style: TextStyle(
-                    color: Colors.teal,
+                    color: AppTheme.onPrimary,
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
                 Text(
                   doctorData['email'] ?? 'Doctor',
-                  style: const TextStyle(color: Colors.tealAccent, fontSize: 14),
+                  style: TextStyle(
+                    color: AppTheme.onPrimary.withOpacity(0.9),
+                    fontSize: 14,
+                  ),
                 ),
               ],
             ),
           ),
           ListTile(
-            leading: Icon(Icons.dashboard, color: Colors.teal.shade600),
+            leading: Icon(Icons.dashboard, color: AppTheme.primary),
             title: const Text('Dashboard'),
             onTap: () => Navigator.pop(context),
-            hoverColor: Colors.teal.shade50,
+            hoverColor: AppTheme.primaryLight,
           ),
           ListTile(
-            leading: Icon(Icons.logout, color: Colors.teal.shade600),
+            leading: Icon(Icons.logout, color: AppTheme.primary),
             title: const Text('Logout'),
             onTap: () async {
               await FirebaseAuth.instance.signOut();
               if (context.mounted) {
-                Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
+                Navigator.of(
+                  context,
+                ).pushNamedAndRemoveUntil('/', (route) => false);
               }
             },
-            hoverColor: Colors.teal.shade50,
+            hoverColor: AppTheme.primaryLight,
           ),
         ],
       ),
@@ -336,7 +373,8 @@ class PatientDetailsDialog extends StatefulWidget {
   State<PatientDetailsDialog> createState() => _PatientDetailsDialogState();
 }
 
-class _PatientDetailsDialogState extends State<PatientDetailsDialog> with TickerProviderStateMixin {
+class _PatientDetailsDialogState extends State<PatientDetailsDialog>
+    with TickerProviderStateMixin {
   late TabController _tabController;
   List<Map<String, dynamic>> appointments = [];
   bool isLoadingAppointments = true;
@@ -388,11 +426,14 @@ class _PatientDetailsDialogState extends State<PatientDetailsDialog> with Ticker
 
   Future<void> _approveAppointment(String appointmentId) async {
     try {
-      await FirebaseFirestore.instance.collection('appointments').doc(appointmentId).update({
-        'status': 'confirmed',
-        'isApproved': true,
-        'approvedAt': FieldValue.serverTimestamp(),
-      });
+      await FirebaseFirestore.instance
+          .collection('appointments')
+          .doc(appointmentId)
+          .update({
+            'status': 'confirmed',
+            'isApproved': true,
+            'approvedAt': FieldValue.serverTimestamp(),
+          });
 
       // create a notification for the patient
       await FirebaseFirestore.instance
@@ -409,20 +450,27 @@ class _PatientDetailsDialogState extends State<PatientDetailsDialog> with Ticker
             'read': false,
           });
 
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Appointment approved')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Appointment approved')));
       await _loadAppointments();
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error approving appointment: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error approving appointment: $e')),
+      );
     }
   }
 
   Future<void> _rejectAppointment(String appointmentId) async {
     try {
-      await FirebaseFirestore.instance.collection('appointments').doc(appointmentId).update({
-        'status': 'rejected',
-        'isApproved': false,
-        'rejectedAt': FieldValue.serverTimestamp(),
-      });
+      await FirebaseFirestore.instance
+          .collection('appointments')
+          .doc(appointmentId)
+          .update({
+            'status': 'rejected',
+            'isApproved': false,
+            'rejectedAt': FieldValue.serverTimestamp(),
+          });
 
       // create a notification for the patient
       await FirebaseFirestore.instance
@@ -439,10 +487,16 @@ class _PatientDetailsDialogState extends State<PatientDetailsDialog> with Ticker
             'read': false,
           });
 
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Appointment rejected and patient notified')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Appointment rejected and patient notified'),
+        ),
+      );
       await _loadAppointments();
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error rejecting appointment: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error rejecting appointment: $e')),
+      );
     }
   }
 
@@ -460,14 +514,16 @@ class _PatientDetailsDialogState extends State<PatientDetailsDialog> with Ticker
           children: [
             Container(
               padding: const EdgeInsets.all(16),
-              color: Colors.teal.shade50,
+              color: AppTheme.primaryLight,
               child: Row(
                 children: [
                   CircleAvatar(
                     radius: 30,
-                    backgroundColor: Colors.teal.shade200,
+                    backgroundColor: AppTheme.primary.withOpacity(0.18),
                     child: Text(
-                      patient['name']?.isNotEmpty == true ? patient['name'][0].toUpperCase() : 'P',
+                      patient['name']?.isNotEmpty == true
+                          ? patient['name'][0].toUpperCase()
+                          : 'P',
                       style: const TextStyle(
                         fontSize: 24,
                         fontWeight: FontWeight.bold,
@@ -482,21 +538,23 @@ class _PatientDetailsDialogState extends State<PatientDetailsDialog> with Ticker
                       children: [
                         Text(
                           patient['name'] ?? 'Unknown Patient',
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 20,
                             fontWeight: FontWeight.bold,
-                            color: Colors.teal,
+                            color: AppTheme.primary,
                           ),
                         ),
                         Text(
                           patient['email'] ?? '',
-                          style: TextStyle(color: Colors.grey.shade600),
+                          style: TextStyle(
+                            color: AppTheme.muted.withOpacity(0.9),
+                          ),
                         ),
                         Text(
                           'Patient ID: $patientId',
                           style: TextStyle(
                             fontSize: 12,
-                            color: Colors.grey.shade500,
+                            color: AppTheme.muted.withOpacity(0.8),
                           ),
                         ),
                       ],
@@ -511,12 +569,15 @@ class _PatientDetailsDialogState extends State<PatientDetailsDialog> with Ticker
             ),
             TabBar(
               controller: _tabController,
-              labelColor: Colors.teal,
-              unselectedLabelColor: Colors.grey,
-              indicatorColor: Colors.teal,
+              labelColor: AppTheme.primary,
+              unselectedLabelColor: AppTheme.muted,
+              indicatorColor: AppTheme.primary,
               tabs: const [
                 Tab(icon: Icon(Icons.person), text: 'Profile'),
-                Tab(icon: Icon(Icons.medical_services), text: 'Medical Records'),
+                Tab(
+                  icon: Icon(Icons.medical_services),
+                  text: 'Medical Records',
+                ),
                 Tab(icon: Icon(Icons.medication), text: 'Prescriptions'),
                 Tab(icon: Icon(Icons.add_circle), text: 'Add Record'),
                 Tab(icon: Icon(Icons.event_note), text: 'Appointments'),
@@ -529,7 +590,10 @@ class _PatientDetailsDialogState extends State<PatientDetailsDialog> with Ticker
                   PatientProfileTab(patient: patient),
                   MedicalRecordsTab(patientId: patientId),
                   PrescriptionsTab(patientId: patientId),
-                  AddRecordTab(patientId: patientId, doctorName: widget.doctorName),
+                  AddRecordTab(
+                    patientId: patientId,
+                    doctorName: widget.doctorName,
+                  ),
                   _buildAppointmentsTab(),
                 ],
               ),
@@ -575,13 +639,19 @@ class _PatientDetailsDialogState extends State<PatientDetailsDialog> with Ticker
                   children: [
                     ElevatedButton(
                       onPressed: () => _approveAppointment(appt['id']),
-                      style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppTheme.primary,
+                        foregroundColor: AppTheme.onPrimary,
+                      ),
                       child: const Text('Approve'),
                     ),
                     const SizedBox(width: 12),
                     ElevatedButton(
                       onPressed: () => _rejectAppointment(appt['id']),
-                      style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppTheme.primaryVariant,
+                        foregroundColor: AppTheme.onPrimary,
+                      ),
                       child: const Text('Reject'),
                     ),
                   ],
@@ -595,40 +665,57 @@ class _PatientDetailsDialogState extends State<PatientDetailsDialog> with Ticker
   }
 }
 
-
-
 class PatientProfileTab extends StatelessWidget {
   final Map<String, dynamic> patient;
 
-  const PatientProfileTab({
-    super.key,
-    required this.patient,
-  });
+  const PatientProfileTab({super.key, required this.patient});
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
+    return SingleChildScrollView(
       padding: const EdgeInsets.all(16.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Patient Information',
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: Colors.teal.shade800,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          color: AppTheme.surface,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+              color: AppTheme.muted.withOpacity(0.08),
+              blurRadius: 12,
+              offset: const Offset(0, 6),
             ),
-          ),
-          const SizedBox(height: 16),
-          _buildInfoRow('Name', patient['name'] ?? 'N/A'),
-          _buildInfoRow('Email', patient['email'] ?? 'N/A'),
-          _buildInfoRow('Phone', patient['phone'] ?? 'N/A'),
-          _buildInfoRow('Date of Birth', patient['dateOfBirth'] ?? 'N/A'),
-          _buildInfoRow('Gender', patient['gender'] ?? 'N/A'),
-          _buildInfoRow('Address', patient['address'] ?? 'N/A'),
-          _buildInfoRow('Disease', patient['disease'] ?? 'N/A'),
-        ],
+          ],
+          border: Border.all(color: AppTheme.muted.withOpacity(0.06)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.info_outline, size: 20),
+                const SizedBox(width: 8),
+                Text(
+                  'Patient Information',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: AppTheme.primaryVariant,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            _buildInfoRow('Name', patient['name'] ?? 'N/A'),
+            _buildInfoRow('Email', patient['email'] ?? 'N/A'),
+            _buildInfoRow('Phone', patient['phone'] ?? 'N/A'),
+            _buildInfoRow('Date of Birth', patient['dateOfBirth'] ?? 'N/A'),
+            _buildInfoRow('Gender', patient['gender'] ?? 'N/A'),
+            _buildInfoRow('Address', patient['address'] ?? 'N/A'),
+            _buildInfoRow('Disease', patient['disease'] ?? 'N/A'),
+          ],
+        ),
       ),
     );
   }
@@ -647,7 +734,10 @@ class PatientProfileTab extends StatelessWidget {
             ),
           ),
           Expanded(
-            child: Text(value, style: TextStyle(color: Colors.grey.shade700)),
+            child: Text(
+              value,
+              style: TextStyle(color: AppTheme.muted.withOpacity(0.95)),
+            ),
           ),
         ],
       ),
@@ -658,10 +748,7 @@ class PatientProfileTab extends StatelessWidget {
 class MedicalRecordsTab extends StatelessWidget {
   final String patientId;
 
-  const MedicalRecordsTab({
-    super.key,
-    required this.patientId,
-  });
+  const MedicalRecordsTab({super.key, required this.patientId});
 
   @override
   Widget build(BuildContext context) {
@@ -680,11 +767,7 @@ class MedicalRecordsTab extends StatelessWidget {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(
-                  Icons.medical_services,
-                  size: 80,
-                  color: Colors.grey,
-                ),
+                Icon(Icons.medical_services, size: 80, color: AppTheme.muted),
                 SizedBox(height: 16),
                 Text('No medical records found'),
               ],
@@ -724,7 +807,7 @@ class MedicalRecordsTab extends StatelessWidget {
                       children: [
                         Icon(
                           Icons.medical_services,
-                          color: Colors.teal,
+                          color: AppTheme.primaryVariant,
                         ),
                         const SizedBox(width: 8),
                         Expanded(
@@ -739,7 +822,7 @@ class MedicalRecordsTab extends StatelessWidget {
                         Text(
                           _formatDate(data['timestamp']),
                           style: TextStyle(
-                            color: Colors.grey.shade600,
+                            color: AppTheme.muted.withOpacity(0.9),
                             fontSize: 12,
                           ),
                         ),
@@ -809,10 +892,7 @@ class MedicalRecordsTab extends StatelessWidget {
 class PrescriptionsTab extends StatelessWidget {
   final String patientId;
 
-  const PrescriptionsTab({
-    super.key,
-    required this.patientId,
-  });
+  const PrescriptionsTab({super.key, required this.patientId});
 
   @override
   Widget build(BuildContext context) {
@@ -867,7 +947,7 @@ class PrescriptionsTab extends StatelessWidget {
                   children: [
                     Row(
                       children: [
-                        Icon(Icons.medication, color: Colors.blue),
+                        Icon(Icons.medication, color: AppTheme.primaryVariant),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
@@ -884,13 +964,13 @@ class PrescriptionsTab extends StatelessWidget {
                             vertical: 4,
                           ),
                           decoration: BoxDecoration(
-                            color: _getStatusColor(data['status']),
+                            color: AppTheme.primary,
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: Text(
                             data['status'] ?? 'Pending',
                             style: const TextStyle(
-                              color: Colors.white,
+                              color: AppTheme.onPrimary,
                               fontSize: 12,
                               fontWeight: FontWeight.bold,
                             ),
@@ -962,20 +1042,7 @@ class PrescriptionsTab extends StatelessWidget {
     return timestamp.toString();
   }
 
-  Color _getStatusColor(String? status) {
-    switch (status?.toLowerCase()) {
-      case 'prescribed':
-        return Colors.blue;
-      case 'ordered':
-        return Colors.orange;
-      case 'dispensed':
-        return Colors.green;
-      case 'completed':
-        return Colors.grey;
-      default:
-        return Colors.blue;
-    }
-  }
+  // _getStatusColor removed: use AppTheme colors for status styling
 }
 
 class AddRecordTab extends StatefulWidget {
@@ -992,7 +1059,8 @@ class AddRecordTab extends StatefulWidget {
   State<AddRecordTab> createState() => _AddRecordTabState();
 }
 
-class _AddRecordTabState extends State<AddRecordTab> with TickerProviderStateMixin {
+class _AddRecordTabState extends State<AddRecordTab>
+    with TickerProviderStateMixin {
   late TabController _recordTabController;
   final _medicalFormKey = GlobalKey<FormState>();
   final _prescriptionFormKey = GlobalKey<FormState>();
@@ -1091,9 +1159,9 @@ class _AddRecordTabState extends State<AddRecordTab> with TickerProviderStateMix
       _durationController.clear();
       _instructionsController.clear();
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error adding prescription: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error adding prescription: $e')));
     }
   }
 

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'doctor_dashboard.dart';
 import 'patient/patient_dashboard.dart';
 import 'signup_page.dart';
+import 'theme.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -103,9 +104,9 @@ class _LoginPageState extends State<LoginPage> {
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: [
-              const Color(0xFF667eea),
-              const Color(0xFF764ba2),
-              Colors.purple.shade200,
+              AppTheme.primaryLight,
+              AppTheme.primaryVariant,
+              AppTheme.primary,
             ],
             stops: const [0.0, 0.7, 1.0],
           ),
@@ -150,7 +151,7 @@ class _LoginPageState extends State<LoginPage> {
                               child: Icon(
                                 Icons.medical_services_rounded,
                                 size: 70,
-                                color: const Color(0xFF667eea),
+                                color: AppTheme.primary,
                               ),
                             ),
                             const SizedBox(height: 32),
@@ -235,8 +236,8 @@ class _LoginPageState extends State<LoginPage> {
                                 decoration: BoxDecoration(
                                   gradient: LinearGradient(
                                     colors: [
-                                      const Color(0xFF667eea),
-                                      const Color(0xFF764ba2),
+                                      AppTheme.primaryVariant,
+                                      AppTheme.primary,
                                     ],
                                   ),
                                   borderRadius: BorderRadius.circular(10),
@@ -290,8 +291,8 @@ class _LoginPageState extends State<LoginPage> {
                                 decoration: BoxDecoration(
                                   gradient: LinearGradient(
                                     colors: [
-                                      const Color(0xFF667eea),
-                                      const Color(0xFF764ba2),
+                                      AppTheme.primaryVariant,
+                                      AppTheme.primary,
                                     ],
                                   ),
                                   borderRadius: BorderRadius.circular(10),
@@ -322,8 +323,8 @@ class _LoginPageState extends State<LoginPage> {
                                   decoration: BoxDecoration(
                                     gradient: LinearGradient(
                                       colors: [
-                                        const Color(0xFF667eea),
-                                        const Color(0xFF764ba2),
+                                        AppTheme.primaryVariant,
+                                        AppTheme.primary,
                                       ],
                                     ),
                                     borderRadius: BorderRadius.circular(16),
@@ -346,9 +347,9 @@ class _LoginPageState extends State<LoginPage> {
                                     borderRadius: BorderRadius.circular(16),
                                     boxShadow: [
                                       BoxShadow(
-                                        color: const Color(
-                                          0xFF667eea,
-                                        ).withOpacity(0.4),
+                                        color: AppTheme.primary.withOpacity(
+                                          0.35,
+                                        ),
                                         blurRadius: 12,
                                         offset: const Offset(0, 6),
                                       ),

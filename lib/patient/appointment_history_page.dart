@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:hospital_management/theme.dart';
 
 class AppointmentHistoryPage extends StatefulWidget {
   const AppointmentHistoryPage({Key? key}) : super(key: key);
@@ -20,9 +21,9 @@ class _AppointmentHistoryPageState extends State<AppointmentHistoryPage> {
         await doc.reference.delete();
       }
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Your appointments have been cleared.'),
-          backgroundColor: Colors.green,
+        SnackBar(
+          content: const Text('Your appointments have been cleared.'),
+          backgroundColor: AppTheme.primaryVariant,
         ),
       );
       setState(() {});
@@ -44,8 +45,8 @@ class _AppointmentHistoryPageState extends State<AppointmentHistoryPage> {
       return Scaffold(
         appBar: AppBar(
           title: const Text('Appointment History'),
-          backgroundColor: const Color.fromARGB(255, 196, 50, 89),
-          foregroundColor: Colors.white,
+          backgroundColor: AppTheme.primary,
+          foregroundColor: AppTheme.onPrimary,
         ),
         body: const Center(
           child: Text('Please log in to view your appointments'),
@@ -56,8 +57,8 @@ class _AppointmentHistoryPageState extends State<AppointmentHistoryPage> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('My Appointments'),
-        backgroundColor: Colors.deepPurple,
-        foregroundColor: Colors.white,
+        backgroundColor: AppTheme.primary,
+        foregroundColor: AppTheme.onPrimary,
         actions: [
           IconButton(
             icon: const Icon(Icons.delete_forever),
@@ -106,12 +107,12 @@ class _AppointmentHistoryPageState extends State<AppointmentHistoryPage> {
                         const Icon(
                           Icons.calendar_today,
                           size: 64,
-                          color: Colors.grey,
+                          color: AppTheme.muted,
                         ),
                         const SizedBox(height: 16),
                         const Text(
                           'No appointments found',
-                          style: TextStyle(fontSize: 18, color: Colors.grey),
+                          style: TextStyle(fontSize: 18, color: AppTheme.muted),
                         ),
                         const Text(
                           'Book your first appointment to see it here',
@@ -123,8 +124,8 @@ class _AppointmentHistoryPageState extends State<AppointmentHistoryPage> {
                           icon: const Icon(Icons.arrow_back),
                           label: const Text('Go Back'),
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.deepPurple,
-                            foregroundColor: Colors.white,
+                            backgroundColor: AppTheme.primary,
+                            foregroundColor: AppTheme.onPrimary,
                           ),
                         ),
                       ],
@@ -163,7 +164,7 @@ class _AppointmentHistoryPageState extends State<AppointmentHistoryPage> {
 
     switch (status.toLowerCase()) {
       case 'confirmed':
-        statusColor = Colors.green;
+        statusColor = AppTheme.primaryVariant;
         statusIcon = Icons.check_circle;
         break;
       case 'cancelled':
@@ -171,7 +172,7 @@ class _AppointmentHistoryPageState extends State<AppointmentHistoryPage> {
         statusIcon = Icons.cancel;
         break;
       case 'completed':
-        statusColor = Colors.blue;
+        statusColor = AppTheme.primaryVariant;
         statusIcon = Icons.done_all;
         break;
       default:
@@ -197,7 +198,7 @@ class _AppointmentHistoryPageState extends State<AppointmentHistoryPage> {
                     style: const TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
-                      color: Colors.deepPurple,
+                      color: AppTheme.primary,
                     ),
                   ),
                 ),
@@ -234,7 +235,7 @@ class _AppointmentHistoryPageState extends State<AppointmentHistoryPage> {
             // Date and time
             Row(
               children: [
-                Icon(Icons.calendar_today, color: Colors.grey[600], size: 20),
+                Icon(Icons.calendar_today, color: AppTheme.muted, size: 20),
                 const SizedBox(width: 8),
                 Text(
                   '${date.day}/${date.month}/${date.year}',
@@ -257,7 +258,7 @@ class _AppointmentHistoryPageState extends State<AppointmentHistoryPage> {
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(Icons.healing, color: Colors.grey[600], size: 20),
+                  Icon(Icons.healing, color: AppTheme.muted, size: 20),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Column(
@@ -288,7 +289,7 @@ class _AppointmentHistoryPageState extends State<AppointmentHistoryPage> {
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(Icons.note, color: Colors.grey[600], size: 20),
+                  Icon(Icons.note, color: AppTheme.muted, size: 20),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Column(
@@ -318,7 +319,7 @@ class _AppointmentHistoryPageState extends State<AppointmentHistoryPage> {
               'Appointment ID: ${data['appointmentId'] ?? appointmentId.substring(0, 8)}',
               style: TextStyle(
                 fontSize: 12,
-                color: Colors.grey[600],
+                color: AppTheme.muted,
                 fontFamily: 'monospace',
               ),
             ),
@@ -339,8 +340,8 @@ class _AppointmentHistoryPageState extends State<AppointmentHistoryPage> {
                     onPressed: () =>
                         _rescheduleAppointment(context, appointmentId, data),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.deepPurple,
-                      foregroundColor: Colors.white,
+                      backgroundColor: AppTheme.primary,
+                      foregroundColor: AppTheme.onPrimary,
                     ),
                     child: const Text('Reschedule'),
                   ),
@@ -443,16 +444,20 @@ class _AppointmentHistoryPageState extends State<AppointmentHistoryPage> {
       return Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: Colors.teal.shade50,
+          color: AppTheme.primaryLight,
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: Colors.teal.shade200),
+          border: Border.all(color: AppTheme.primaryLight),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
-                Icon(Icons.medication, color: Colors.teal.shade600, size: 20),
+                Icon(
+                  Icons.medication,
+                  color: AppTheme.primaryVariant,
+                  size: 20,
+                ),
                 const SizedBox(width: 8),
                 const Text(
                   'Medicine Report',
@@ -474,7 +479,7 @@ class _AppointmentHistoryPageState extends State<AppointmentHistoryPage> {
                 children: [
                   Icon(
                     Icons.medical_information,
-                    color: Colors.teal.shade600,
+                    color: AppTheme.primaryVariant,
                     size: 16,
                   ),
                   const SizedBox(width: 8),
@@ -505,7 +510,7 @@ class _AppointmentHistoryPageState extends State<AppointmentHistoryPage> {
                 children: [
                   Icon(
                     Icons.local_pharmacy,
-                    color: Colors.teal.shade600,
+                    color: AppTheme.primaryVariant,
                     size: 16,
                   ),
                   const SizedBox(width: 8),
@@ -524,7 +529,7 @@ class _AppointmentHistoryPageState extends State<AppointmentHistoryPage> {
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(6),
-                    border: Border.all(color: Colors.teal.shade100),
+                    border: Border.all(color: AppTheme.primaryLight),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -588,7 +593,11 @@ class _AppointmentHistoryPageState extends State<AppointmentHistoryPage> {
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(Icons.note_alt, color: Colors.teal.shade600, size: 16),
+                  Icon(
+                    Icons.note_alt,
+                    color: AppTheme.primaryVariant,
+                    size: 16,
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Column(
@@ -622,7 +631,7 @@ class _AppointmentHistoryPageState extends State<AppointmentHistoryPage> {
                   icon: const Icon(Icons.visibility, size: 16),
                   label: const Text('View Full Report'),
                   style: TextButton.styleFrom(
-                    foregroundColor: Colors.teal,
+                    foregroundColor: AppTheme.primaryVariant,
                     padding: const EdgeInsets.symmetric(horizontal: 8),
                   ),
                 ),
@@ -650,16 +659,20 @@ class _AppointmentHistoryPageState extends State<AppointmentHistoryPage> {
       return Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: Colors.blue.shade50,
+          color: AppTheme.primaryLight,
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: Colors.blue.shade200),
+          border: Border.all(color: AppTheme.primaryLight),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
-                Icon(Icons.info_outline, color: Colors.blue.shade600, size: 20),
+                Icon(
+                  Icons.info_outline,
+                  color: AppTheme.primaryVariant,
+                  size: 20,
+                ),
                 const SizedBox(width: 8),
                 const Text(
                   'Medical Records',
@@ -877,16 +890,16 @@ class _AppointmentHistoryPageState extends State<AppointmentHistoryPage> {
       return Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: Colors.green.shade50,
+          color: AppTheme.primaryLight,
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: Colors.green.shade200),
+          border: Border.all(color: AppTheme.primaryLight),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
-                Icon(Icons.feedback, color: Colors.green.shade600, size: 20),
+                Icon(Icons.feedback, color: AppTheme.primaryVariant, size: 20),
                 const SizedBox(width: 8),
                 const Text(
                   'Your Feedback',
@@ -937,7 +950,7 @@ class _AppointmentHistoryPageState extends State<AppointmentHistoryPage> {
                   icon: const Icon(Icons.edit, size: 16),
                   label: const Text('Edit'),
                   style: TextButton.styleFrom(
-                    foregroundColor: Colors.blue,
+                    foregroundColor: AppTheme.primaryVariant,
                     padding: const EdgeInsets.symmetric(horizontal: 8),
                   ),
                 ),
@@ -950,13 +963,13 @@ class _AppointmentHistoryPageState extends State<AppointmentHistoryPage> {
       return Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: Colors.blue.shade50,
+          color: AppTheme.primaryLight,
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: Colors.blue.shade200),
+          border: Border.all(color: AppTheme.primaryLight),
         ),
         child: Row(
           children: [
-            Icon(Icons.rate_review, color: Colors.blue.shade600, size: 20),
+            Icon(Icons.rate_review, color: AppTheme.primaryVariant, size: 20),
             const SizedBox(width: 8),
             const Expanded(
               child: Text(
@@ -970,8 +983,8 @@ class _AppointmentHistoryPageState extends State<AppointmentHistoryPage> {
               icon: const Icon(Icons.star, size: 16),
               label: const Text('Rate'),
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.blue.shade600,
-                foregroundColor: Colors.white,
+                backgroundColor: AppTheme.primaryVariant,
+                foregroundColor: AppTheme.onPrimary,
                 padding: const EdgeInsets.symmetric(
                   horizontal: 16,
                   vertical: 8,
@@ -1000,7 +1013,7 @@ class _AppointmentHistoryPageState extends State<AppointmentHistoryPage> {
         builder: (context, setState) => AlertDialog(
           title: Row(
             children: [
-              Icon(Icons.feedback, color: Colors.blue.shade600),
+              Icon(Icons.feedback, color: AppTheme.primaryVariant),
               const SizedBox(width: 12),
               const Text('Rate Your Experience'),
             ],
@@ -1209,20 +1222,20 @@ class _AppointmentHistoryPageState extends State<AppointmentHistoryPage> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
-          color: Colors.blue.shade50,
+          color: AppTheme.primaryLight,
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: Colors.blue.shade200),
+          border: Border.all(color: AppTheme.primaryLight),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 16, color: Colors.blue.shade600),
+            Icon(icon, size: 16, color: AppTheme.primaryVariant),
             const SizedBox(width: 6),
             Text(
               label,
               style: TextStyle(
                 fontSize: 12,
-                color: Colors.blue.shade600,
+                color: AppTheme.primaryVariant,
                 fontWeight: FontWeight.w500,
               ),
             ),
@@ -1325,7 +1338,7 @@ class _AppointmentHistoryPageState extends State<AppointmentHistoryPage> {
               ),
             ],
           ),
-          backgroundColor: Colors.green,
+          backgroundColor: AppTheme.primaryVariant,
           duration: const Duration(seconds: 3),
         ),
       );
@@ -1358,7 +1371,7 @@ class _AppointmentHistoryPageState extends State<AppointmentHistoryPage> {
         builder: (context, setState) => AlertDialog(
           title: Row(
             children: [
-              Icon(Icons.edit, color: Colors.blue.shade600),
+              Icon(Icons.edit, color: AppTheme.primaryVariant),
               const SizedBox(width: 12),
               const Text('Edit Your Feedback'),
             ],
@@ -1453,8 +1466,8 @@ class _AppointmentHistoryPageState extends State<AppointmentHistoryPage> {
                       );
                     },
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.blue.shade600,
-                foregroundColor: Colors.white,
+                backgroundColor: AppTheme.primaryVariant,
+                foregroundColor: AppTheme.onPrimary,
               ),
               child: isSubmitting
                   ? const SizedBox(
@@ -1495,15 +1508,15 @@ class _AppointmentHistoryPageState extends State<AppointmentHistoryPage> {
       Navigator.pop(context);
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
+        SnackBar(
           content: Row(
             children: [
-              Icon(Icons.check_circle, color: Colors.white),
-              SizedBox(width: 8),
-              Text('Feedback updated successfully!'),
+              const Icon(Icons.check_circle, color: Colors.white),
+              const SizedBox(width: 8),
+              const Text('Feedback updated successfully!'),
             ],
           ),
-          backgroundColor: Colors.green,
+          backgroundColor: AppTheme.primaryVariant,
         ),
       );
     } catch (e) {
@@ -1542,9 +1555,9 @@ class _AppointmentHistoryPageState extends State<AppointmentHistoryPage> {
                 Navigator.pop(context); // Close edit dialog
 
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Feedback deleted successfully'),
-                    backgroundColor: Colors.orange,
+                  SnackBar(
+                    content: const Text('Feedback deleted successfully'),
+                    backgroundColor: AppTheme.primaryVariant,
                   ),
                 );
               } catch (e) {
@@ -1569,9 +1582,9 @@ class _AppointmentHistoryPageState extends State<AppointmentHistoryPage> {
   Color _getStatusColor(String status) {
     switch (status.toLowerCase()) {
       case 'confirmed':
-        return Colors.green;
+        return AppTheme.primaryVariant;
       case 'completed':
-        return Colors.blue;
+        return AppTheme.primaryVariant;
       case 'cancelled':
         return Colors.red;
       case 'pending':

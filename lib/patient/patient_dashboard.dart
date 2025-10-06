@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../theme.dart';
 import '../login_page.dart';
 import 'medical_reports_page.dart';
 import 'appointment_history_page.dart';
@@ -37,14 +38,14 @@ class _DashboardScreenState extends State<DashboardScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey[50],
+      backgroundColor: AppTheme.primaryLight,
       appBar: AppBar(
         title: const Text(
           'Patient Dashboard',
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
-        backgroundColor: Colors.blue.shade600,
-        foregroundColor: Colors.white,
+        backgroundColor: AppTheme.primary,
+        foregroundColor: AppTheme.onPrimary,
         elevation: 0,
         actions: [
           IconButton(
@@ -88,12 +89,11 @@ class _DashboardScreenState extends State<DashboardScreen>
                       children: [
                         // Welcome Section
                         _buildWelcomeSection(userData),
-                        const SizedBox(height: 24),
+                        const SizedBox(height: 16),
 
-                        // Basic Health Information moved to Profile page - hide on dashboard
-                        // (kept in profile_page for editing/viewing)
-                        // _buildBasicHealthInfo(userData),
-                        // const SizedBox(height: 24),
+                        // Patient information (phone, DOB, gender, address)
+                        _buildPatientInfoSection(userData),
+                        const SizedBox(height: 24),
 
                         // Recent Prescriptions Section
                         _buildRecentPrescriptionsSection(currentUser!.uid),
@@ -116,14 +116,14 @@ class _DashboardScreenState extends State<DashboardScreen>
       padding: const EdgeInsets.all(28),
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [const Color(0xFF667eea), const Color(0xFF764ba2)],
+          colors: [AppTheme.primary, AppTheme.primaryVariant],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF667eea).withOpacity(0.3),
+            color: AppTheme.primary.withOpacity(0.25),
             blurRadius: 20,
             offset: const Offset(0, 10),
             spreadRadius: 3,
@@ -140,18 +140,18 @@ class _DashboardScreenState extends State<DashboardScreen>
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     colors: [
-                      Colors.white.withOpacity(0.3),
-                      Colors.white.withOpacity(0.1),
+                      AppTheme.surface.withOpacity(0.3),
+                      AppTheme.surface.withOpacity(0.1),
                     ],
                   ),
                   borderRadius: BorderRadius.circular(25),
                   border: Border.all(
-                    color: Colors.white.withOpacity(0.4),
+                    color: AppTheme.surface.withOpacity(0.4),
                     width: 2,
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.white.withOpacity(0.2),
+                      color: AppTheme.surface.withOpacity(0.2),
                       blurRadius: 10,
                       offset: const Offset(0, 4),
                     ),
@@ -159,11 +159,11 @@ class _DashboardScreenState extends State<DashboardScreen>
                 ),
                 child: CircleAvatar(
                   radius: 28,
-                  backgroundColor: Colors.white.withOpacity(0.1),
+                  backgroundColor: AppTheme.surface.withOpacity(0.05),
                   child: Icon(
                     Icons.waving_hand,
                     size: 32,
-                    color: Colors.amber.shade300,
+                    color: AppTheme.onPrimary,
                   ),
                 ),
               ),
@@ -177,7 +177,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                         Text(
                           'Hi ',
                           style: TextStyle(
-                            color: Colors.white.withOpacity(0.95),
+                            color: AppTheme.onPrimary.withOpacity(0.95),
                             fontSize: 24,
                             fontWeight: FontWeight.w500,
                           ),
@@ -200,10 +200,10 @@ class _DashboardScreenState extends State<DashboardScreen>
                         vertical: 6,
                       ),
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.15),
+                        color: AppTheme.surface.withOpacity(0.15),
                         borderRadius: BorderRadius.circular(20),
                         border: Border.all(
-                          color: Colors.white.withOpacity(0.2),
+                          color: AppTheme.surface.withOpacity(0.2),
                           width: 1,
                         ),
                       ),
@@ -212,14 +212,14 @@ class _DashboardScreenState extends State<DashboardScreen>
                         children: [
                           Icon(
                             Icons.email_outlined,
-                            color: Colors.white.withOpacity(0.9),
+                            color: AppTheme.onPrimary.withOpacity(0.9),
                             size: 16,
                           ),
                           const SizedBox(width: 8),
                           Text(
                             userData['email'] ?? 'No email',
                             style: TextStyle(
-                              color: Colors.white.withOpacity(0.9),
+                              color: AppTheme.onPrimary.withOpacity(0.9),
                             ),
                           ),
                         ],
@@ -230,6 +230,92 @@ class _DashboardScreenState extends State<DashboardScreen>
               ),
             ],
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPatientInfoSection(Map<String, dynamic> userData) {
+    final phone = userData['phone'] ?? 'N/A';
+    final dob = userData['dateOfBirth'] ?? 'N/A';
+    final gender = userData['gender'] ?? 'N/A';
+    final address = userData['address'] ?? 'N/A';
+
+    Widget infoRow(String label, String value, {IconData? icon}) {
+      return Row(
+        children: [
+          if (icon != null) Icon(icon, size: 18, color: AppTheme.muted),
+          if (icon != null) const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  value.toString(),
+                  style: TextStyle(color: Colors.grey[800]),
+                ),
+              ],
+            ),
+          ),
+        ],
+      );
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: AppTheme.surface,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: AppTheme.muted.withOpacity(0.12),
+            blurRadius: 10,
+            offset: const Offset(0, 6),
+          ),
+        ],
+        border: Border.all(color: AppTheme.muted.withOpacity(0.06)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: AppTheme.primaryLight,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(Icons.info_outline, color: AppTheme.primary),
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Text(
+                  'Patient Information',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+              ),
+              IconButton(
+                tooltip: 'Edit patient information',
+                onPressed: () => _editPatientInfo(userData),
+                icon: Icon(Icons.edit, color: AppTheme.primary),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          infoRow('Phone', phone.toString(), icon: Icons.phone),
+          const SizedBox(height: 8),
+          infoRow('Date of Birth', dob.toString(), icon: Icons.cake),
+          const SizedBox(height: 8),
+          infoRow('Gender', gender.toString(), icon: Icons.person),
+          const SizedBox(height: 8),
+          infoRow('Address', address.toString(), icon: Icons.location_on),
         ],
       ),
     );
@@ -268,20 +354,23 @@ class _DashboardScreenState extends State<DashboardScreen>
           padding: const EdgeInsets.all(24),
           decoration: BoxDecoration(
             gradient: LinearGradient(
-              colors: [Colors.purple.shade50, Colors.white],
+              colors: [AppTheme.primaryLight, Colors.white],
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
             ),
             borderRadius: BorderRadius.circular(20),
             boxShadow: [
               BoxShadow(
-                color: Colors.purple.shade200.withOpacity(0.5),
+                color: AppTheme.primary.withOpacity(0.08),
                 blurRadius: 15,
                 offset: const Offset(0, 5),
                 spreadRadius: 1,
               ),
             ],
-            border: Border.all(color: Colors.purple.shade200, width: 1),
+            border: Border.all(
+              color: AppTheme.primary.withOpacity(0.08),
+              width: 1,
+            ),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -292,30 +381,30 @@ class _DashboardScreenState extends State<DashboardScreen>
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
-                        colors: [Colors.purple.shade400, Colors.purple.shade600],
+                        colors: [AppTheme.primaryVariant, AppTheme.primary],
                       ),
                       borderRadius: BorderRadius.circular(15),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.purple.shade200,
+                          color: AppTheme.primary.withOpacity(0.08),
                           blurRadius: 8,
                           offset: const Offset(0, 4),
                         ),
                       ],
                     ),
-                    child: const Icon(
+                    child: Icon(
                       Icons.medication,
-                      color: Colors.white,
+                      color: AppTheme.onPrimary,
                       size: 24,
                     ),
                   ),
                   const SizedBox(width: 16),
-                  const Text(
+                  Text(
                     'Recent Prescriptions',
                     style: TextStyle(
                       fontSize: 22,
                       fontWeight: FontWeight.bold,
-                      color: Color(0xFF2D3748),
+                      color: AppTheme.muted,
                     ),
                   ),
                 ],
@@ -327,11 +416,11 @@ class _DashboardScreenState extends State<DashboardScreen>
                   margin: const EdgeInsets.only(bottom: 12),
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: AppTheme.surface,
                     borderRadius: BorderRadius.circular(12),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.grey.shade200,
+                        color: AppTheme.muted.withOpacity(0.08),
                         blurRadius: 8,
                         offset: const Offset(0, 2),
                       ),
@@ -342,12 +431,12 @@ class _DashboardScreenState extends State<DashboardScreen>
                       Container(
                         padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
-                          color: Colors.purple.shade100,
+                          color: AppTheme.primaryLight,
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Icon(
                           Icons.medication,
-                          color: Colors.purple.shade600,
+                          color: AppTheme.primary,
                           size: 20,
                         ),
                       ),
@@ -379,17 +468,14 @@ class _DashboardScreenState extends State<DashboardScreen>
                           vertical: 4,
                         ),
                         decoration: BoxDecoration(
-                          color: _getStatusColor(data['status']).withOpacity(0.1),
+                          color: AppTheme.primary.withOpacity(0.08),
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: _getStatusColor(data['status']),
-                            width: 1,
-                          ),
+                          border: Border.all(color: AppTheme.primary, width: 1),
                         ),
                         child: Text(
                           data['status'] ?? 'Pending',
                           style: TextStyle(
-                            color: _getStatusColor(data['status']),
+                            color: AppTheme.primary,
                             fontSize: 12,
                             fontWeight: FontWeight.bold,
                           ),
@@ -411,7 +497,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                   icon: const Icon(Icons.arrow_forward),
                   label: const Text('View All Prescriptions'),
                   style: TextButton.styleFrom(
-                    foregroundColor: Colors.purple.shade600,
+                    foregroundColor: AppTheme.primary,
                   ),
                 ),
               ),
@@ -422,40 +508,27 @@ class _DashboardScreenState extends State<DashboardScreen>
     );
   }
 
-  Color _getStatusColor(String? status) {
-    switch (status?.toLowerCase()) {
-      case 'prescribed':
-        return Colors.blue;
-      case 'ordered':
-        return Colors.orange;
-      case 'dispensed':
-        return Colors.green;
-      case 'completed':
-        return Colors.grey;
-      default:
-        return Colors.blue;
-    }
-  }
+  // _getStatusColor removed: status styling is handled directly via AppTheme
 
   Widget _buildQuickActionsSection() {
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [Colors.grey.shade50, Colors.white],
+          colors: [AppTheme.primaryLight, AppTheme.surface],
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
         ),
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.grey.shade300.withOpacity(0.5),
+            color: AppTheme.muted.withOpacity(0.18),
             blurRadius: 15,
             offset: const Offset(0, 5),
             spreadRadius: 1,
           ),
         ],
-        border: Border.all(color: Colors.grey.shade200, width: 1),
+        border: Border.all(color: AppTheme.muted.withOpacity(0.06), width: 1),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -466,12 +539,12 @@ class _DashboardScreenState extends State<DashboardScreen>
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
-                    colors: [Colors.blue.shade400, Colors.blue.shade600],
+                    colors: [AppTheme.primaryVariant, AppTheme.primary],
                   ),
                   borderRadius: BorderRadius.circular(15),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.blue.shade200,
+                      color: AppTheme.primary.withOpacity(0.12),
                       blurRadius: 8,
                       offset: const Offset(0, 4),
                     ),
@@ -479,7 +552,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                 ),
                 child: Icon(
                   Icons.medical_services,
-                  color: Colors.white,
+                  color: AppTheme.onPrimary,
                   size: 24,
                 ),
               ),
@@ -506,7 +579,7 @@ class _DashboardScreenState extends State<DashboardScreen>
               _buildActionCard(
                 'Doctor Consultation',
                 Icons.video_call,
-                Colors.blue,
+                AppTheme.primaryVariant,
                 () => Navigator.push(
                   context,
                   MaterialPageRoute(
@@ -517,7 +590,7 @@ class _DashboardScreenState extends State<DashboardScreen>
               _buildActionCard(
                 'Medical Records',
                 Icons.medical_information,
-                Colors.green,
+                AppTheme.primaryVariant,
                 () => Navigator.push(
                   context,
                   MaterialPageRoute(
@@ -528,7 +601,7 @@ class _DashboardScreenState extends State<DashboardScreen>
               _buildActionCard(
                 'Appointments',
                 Icons.calendar_today,
-                Colors.orange,
+                AppTheme.primaryVariant,
                 () => Navigator.push(
                   context,
                   MaterialPageRoute(
@@ -539,7 +612,7 @@ class _DashboardScreenState extends State<DashboardScreen>
               _buildActionCard(
                 'Health Tips',
                 Icons.health_and_safety,
-                Colors.teal,
+                AppTheme.primaryVariant,
                 _showHealthTips,
               ),
             ],
@@ -806,6 +879,101 @@ class _DashboardScreenState extends State<DashboardScreen>
     );
   }
 
+  void _editPatientInfo(Map<String, dynamic> userData) {
+    final phoneController = TextEditingController(
+      text: userData['phone'] ?? '',
+    );
+    final dobController = TextEditingController(
+      text: userData['dateOfBirth'] ?? '',
+    );
+    final addressController = TextEditingController(
+      text: userData['address'] ?? '',
+    );
+    String selectedGender = userData['gender'] ?? 'Male';
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Edit Patient Information'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: phoneController,
+                decoration: const InputDecoration(labelText: 'Phone'),
+                keyboardType: TextInputType.phone,
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: dobController,
+                decoration: const InputDecoration(
+                  labelText: 'Date of Birth (DD/MM/YYYY)',
+                ),
+              ),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<String>(
+                value: selectedGender,
+                decoration: const InputDecoration(labelText: 'Gender'),
+                items: ['Male', 'Female', 'Other']
+                    .map((g) => DropdownMenuItem(value: g, child: Text(g)))
+                    .toList(),
+                onChanged: (v) => selectedGender = v ?? selectedGender,
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: addressController,
+                decoration: const InputDecoration(labelText: 'Address'),
+                maxLines: 2,
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final user = FirebaseAuth.instance.currentUser;
+              if (user == null) return;
+
+              final updates = {
+                'phone': phoneController.text.trim(),
+                'dateOfBirth': dobController.text.trim(),
+                'gender': selectedGender,
+                'address': addressController.text.trim(),
+              };
+
+              try {
+                await FirebaseFirestore.instance
+                    .collection('users')
+                    .doc(user.uid)
+                    .set(updates, SetOptions(merge: true));
+                if (context.mounted) {
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Patient information updated'),
+                    ),
+                  );
+                }
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Failed to update: $e')),
+                  );
+                }
+              }
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildHealthTip(
     IconData icon,
     String title,
@@ -851,4 +1019,3 @@ class _DashboardScreenState extends State<DashboardScreen>
     );
   }
 }
-
