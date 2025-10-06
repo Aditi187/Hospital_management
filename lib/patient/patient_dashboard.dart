@@ -2,13 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../login_page.dart';
-import 'profile_page.dart';
-import 'settings_page.dart';
-import 'privacy_settings_page.dart';
 import 'medical_reports_page.dart';
 import 'appointment_history_page.dart';
-import 'medicine_ordering_page.dart';
-import 'help_support_page.dart';
 import '../doctor_consultation_page.dart';
 
 class DashboardScreen extends StatefulWidget {
@@ -95,15 +90,16 @@ class _DashboardScreenState extends State<DashboardScreen>
                         _buildWelcomeSection(userData),
                         const SizedBox(height: 24),
 
-                        // Basic Health Information
-                        _buildBasicHealthInfo(userData),
+                        // Basic Health Information moved to Profile page - hide on dashboard
+                        // (kept in profile_page for editing/viewing)
+                        // _buildBasicHealthInfo(userData),
+                        // const SizedBox(height: 24),
+
+                        // Recent Prescriptions Section
+                        _buildRecentPrescriptionsSection(currentUser!.uid),
                         const SizedBox(height: 24),
 
-                        // Quick Actions
-                        _buildEmergencyActionsSection(),
-                        const SizedBox(height: 24),
-
-                        // Healthcare Services
+                        // Healthcare Services (only key actions kept)
                         _buildQuickActionsSection(),
                       ],
                     ),
@@ -221,11 +217,9 @@ class _DashboardScreenState extends State<DashboardScreen>
                           ),
                           const SizedBox(width: 8),
                           Text(
-                            userData['email'] ?? 'user@example.com',
+                            userData['email'] ?? 'No email',
                             style: TextStyle(
-                              color: Colors.white.withOpacity(0.95),
-                              fontSize: 14,
-                              fontWeight: FontWeight.w500,
+                              color: Colors.white.withOpacity(0.9),
                             ),
                           ),
                         ],
@@ -236,265 +230,211 @@ class _DashboardScreenState extends State<DashboardScreen>
               ),
             ],
           ),
-          const SizedBox(height: 24),
-          Row(
+        ],
+      ),
+    );
+  }
+
+  // Health info cards removed from dashboard; kept in profile_page for editing/viewing.
+
+  Widget _buildRecentPrescriptionsSection(String userId) {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('prescriptions')
+          .where('patientId', isEqualTo: userId)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const SizedBox.shrink();
+        }
+
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+          return const SizedBox.shrink();
+        }
+
+        final prescriptions = snapshot.data!.docs;
+        prescriptions.sort((a, b) {
+          final aData = a.data() as Map<String, dynamic>;
+          final bData = b.data() as Map<String, dynamic>;
+          final aTs = aData['prescribedDate'] as Timestamp?;
+          final bTs = bData['prescribedDate'] as Timestamp?;
+          if (aTs == null) return 1;
+          if (bTs == null) return -1;
+          return bTs.compareTo(aTs);
+        });
+        final recentPrescriptions = prescriptions.take(3);
+
+        return Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Colors.purple.shade50, Colors.white],
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+            ),
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.purple.shade200.withOpacity(0.5),
+                blurRadius: 15,
+                offset: const Offset(0, 5),
+                spreadRadius: 1,
+              ),
+            ],
+            border: Border.all(color: Colors.purple.shade200, width: 1),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 12,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.15),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                      color: Colors.white.withOpacity(0.25),
-                      width: 1,
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [Colors.purple.shade400, Colors.purple.shade600],
+                      ),
+                      borderRadius: BorderRadius.circular(15),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.purple.shade200,
+                          blurRadius: 8,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
                     ),
+                    child: const Icon(
+                      Icons.medication,
+                      color: Colors.white,
+                      size: 24,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  const Text(
+                    'Recent Prescriptions',
+                    style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF2D3748),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              ...recentPrescriptions.map((doc) {
+                final data = doc.data() as Map<String, dynamic>;
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.grey.shade200,
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
                   ),
                   child: Row(
                     children: [
-                      Icon(
-                        Icons.badge_outlined,
-                        color: Colors.white.withOpacity(0.9),
-                        size: 18,
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.purple.shade100,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Icon(
+                          Icons.medication,
+                          color: Colors.purple.shade600,
+                          size: 20,
+                        ),
                       ),
-                      const SizedBox(width: 10),
-                      Text(
-                        'ID: ${userData['personalId'] ?? 'N/A'}',
-                        style: TextStyle(
-                          color: Colors.white.withOpacity(0.95),
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              data['medicineName'] ?? 'Medicine',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                              ),
+                            ),
+                            Text(
+                              'Dr. ${data['doctorName'] ?? 'Unknown'}',
+                              style: TextStyle(
+                                color: Colors.grey.shade600,
+                                fontSize: 14,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: _getStatusColor(data['status']).withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: _getStatusColor(data['status']),
+                            width: 1,
+                          ),
+                        ),
+                        child: Text(
+                          data['status'] ?? 'Pending',
+                          style: TextStyle(
+                            color: _getStatusColor(data['status']),
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
                     ],
                   ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 12,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.15),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: Colors.white.withOpacity(0.25),
-                    width: 1,
+                );
+              }),
+              const SizedBox(height: 16),
+              Center(
+                child: TextButton.icon(
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const MedicalReportsPage(),
+                    ),
                   ),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.access_time,
-                      color: Colors.white.withOpacity(0.9),
-                      size: 18,
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      _getTimeGreeting(),
-                      style: TextStyle(
-                        color: Colors.white.withOpacity(0.95),
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
+                  icon: const Icon(Icons.arrow_forward),
+                  label: const Text('View All Prescriptions'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: Colors.purple.shade600,
+                  ),
                 ),
               ),
             ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
-  String _getTimeGreeting() {
-    final hour = DateTime.now().hour;
-    if (hour < 12) {
-      return 'Good Morning';
-    } else if (hour < 17) {
-      return 'Good Afternoon';
-    } else {
-      return 'Good Evening';
+  Color _getStatusColor(String? status) {
+    switch (status?.toLowerCase()) {
+      case 'prescribed':
+        return Colors.blue;
+      case 'ordered':
+        return Colors.orange;
+      case 'dispensed':
+        return Colors.green;
+      case 'completed':
+        return Colors.grey;
+      default:
+        return Colors.blue;
     }
-  }
-
-  Widget _buildBasicHealthInfo(Map<String, dynamic> userData) {
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [Colors.white, Colors.grey.shade50],
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-        ),
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.shade300.withOpacity(0.5),
-            blurRadius: 15,
-            offset: const Offset(0, 5),
-            spreadRadius: 1,
-          ),
-        ],
-        border: Border.all(color: Colors.grey.shade200, width: 1),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [Colors.green.shade400, Colors.green.shade600],
-                  ),
-                  borderRadius: BorderRadius.circular(15),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.green.shade200,
-                      blurRadius: 8,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: Icon(
-                  Icons.health_and_safety,
-                  color: Colors.white,
-                  size: 24,
-                ),
-              ),
-              const SizedBox(width: 16),
-              const Text(
-                'Basic Health Info',
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF2D3748),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 20),
-          Row(
-            children: [
-              Expanded(
-                child: _buildHealthInfoCard(
-                  'Blood Type',
-                  'O+',
-                  Icons.bloodtype,
-                  const Color(0xFFE53E3E),
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: _buildHealthInfoCard(
-                  'Weight',
-                  '70 kg',
-                  Icons.monitor_weight,
-                  const Color(0xFF3182CE),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: _buildHealthInfoCard(
-                  'Height',
-                  '175 cm',
-                  Icons.height,
-                  const Color(0xFFD69E2E),
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: _buildHealthInfoCard(
-                  'Age',
-                  userData['age'] != null ? '${userData['age']} years' : 'N/A',
-                  Icons.cake,
-                  const Color(0xFF805AD5),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildHealthInfoCard(
-    String title,
-    String value,
-    IconData icon,
-    Color color,
-  ) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [color.withOpacity(0.1), color.withOpacity(0.05)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: color.withOpacity(0.2), width: 1.5),
-        boxShadow: [
-          BoxShadow(
-            color: color.withOpacity(0.2),
-            blurRadius: 8,
-            offset: const Offset(0, 4),
-            spreadRadius: 0,
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(colors: [color, color.withOpacity(0.8)]),
-              borderRadius: BorderRadius.circular(12),
-              boxShadow: [
-                BoxShadow(
-                  color: color.withOpacity(0.3),
-                  blurRadius: 6,
-                  offset: const Offset(0, 3),
-                ),
-              ],
-            ),
-            child: Icon(icon, color: Colors.white, size: 20),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: color.withOpacity(0.9),
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            title,
-            style: TextStyle(
-              fontSize: 13,
-              color: Colors.grey.shade600,
-              fontWeight: FontWeight.w500,
-            ),
-            textAlign: TextAlign.center,
-          ),
-        ],
-      ),
-    );
   }
 
   Widget _buildQuickActionsSection() {
@@ -586,17 +526,6 @@ class _DashboardScreenState extends State<DashboardScreen>
                 ),
               ),
               _buildActionCard(
-                'Medicine Order',
-                Icons.local_pharmacy,
-                Colors.purple,
-                () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const MedicineOrderingPage(),
-                  ),
-                ),
-              ),
-              _buildActionCard(
                 'Appointments',
                 Icons.calendar_today,
                 Colors.orange,
@@ -606,6 +535,12 @@ class _DashboardScreenState extends State<DashboardScreen>
                     builder: (context) => const AppointmentHistoryPage(),
                   ),
                 ),
+              ),
+              _buildActionCard(
+                'Health Tips',
+                Icons.health_and_safety,
+                Colors.teal,
+                _showHealthTips,
               ),
             ],
           ),
@@ -739,17 +674,6 @@ class _DashboardScreenState extends State<DashboardScreen>
             },
           ),
           _buildDrawerItem(
-            icon: Icons.person,
-            title: 'Profile Settings',
-            onTap: () {
-              Navigator.pop(context);
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const ProfilePage()),
-              );
-            },
-          ),
-          _buildDrawerItem(
             icon: Icons.medical_information,
             title: 'Medical Records',
             onTap: () {
@@ -771,57 +695,6 @@ class _DashboardScreenState extends State<DashboardScreen>
                 context,
                 MaterialPageRoute(
                   builder: (context) => const AppointmentHistoryPage(),
-                ),
-              );
-            },
-          ),
-          _buildDrawerItem(
-            icon: Icons.local_pharmacy,
-            title: 'Medicine Orders',
-            onTap: () {
-              Navigator.pop(context);
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const MedicineOrderingPage(),
-                ),
-              );
-            },
-          ),
-          const Divider(),
-          _buildDrawerItem(
-            icon: Icons.settings,
-            title: 'App Settings',
-            onTap: () {
-              Navigator.pop(context);
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const SettingsPage()),
-              );
-            },
-          ),
-          _buildDrawerItem(
-            icon: Icons.security,
-            title: 'Privacy & Security',
-            onTap: () {
-              Navigator.pop(context);
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const PrivacySettingsPage(),
-                ),
-              );
-            },
-          ),
-          _buildDrawerItem(
-            icon: Icons.help,
-            title: 'Help & Support',
-            onTap: () {
-              Navigator.pop(context);
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const HelpSupportPage(),
                 ),
               );
             },
@@ -856,258 +729,11 @@ class _DashboardScreenState extends State<DashboardScreen>
     );
   }
 
-  Widget _buildEmergencyActionsSection() {
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [Colors.grey.shade50, Colors.white],
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-        ),
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.shade300.withOpacity(0.5),
-            blurRadius: 15,
-            offset: const Offset(0, 5),
-            spreadRadius: 1,
-          ),
-        ],
-        border: Border.all(color: Colors.grey.shade200, width: 1),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [Colors.red.shade400, Colors.red.shade600],
-                  ),
-                  borderRadius: BorderRadius.circular(15),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.red.shade200,
-                      blurRadius: 8,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: Icon(Icons.flash_on, color: Colors.white, size: 24),
-              ),
-              const SizedBox(width: 16),
-              const Text(
-                'Quick Actions',
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF2D3748),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 20),
-          Row(
-            children: [
-              Expanded(
-                child: _buildQuickActionCard(
-                  title: 'Emergency Call',
-                  icon: Icons.emergency,
-                  color: Colors.red,
-                  onTap: () => _makeEmergencyCall(),
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: _buildQuickActionCard(
-                  title: 'Health Tips',
-                  icon: Icons.health_and_safety,
-                  color: Colors.green,
-                  onTap: () => _showHealthTips(),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
+  // Emergency actions removed from dashboard. Health Tips still accessible via Quick Actions section below.
 
-  Widget _buildQuickActionCard({
-    required String title,
-    required IconData icon,
-    required Color color,
-    required VoidCallback onTap,
-  }) {
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [Colors.white, color.withOpacity(0.05)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: [
-          BoxShadow(
-            color: color.withOpacity(0.2),
-            blurRadius: 12,
-            offset: const Offset(0, 6),
-            spreadRadius: 0,
-          ),
-        ],
-        border: Border.all(color: color.withOpacity(0.15), width: 1.5),
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(18),
-          child: Container(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [color, color.withOpacity(0.8)],
-                    ),
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: [
-                      BoxShadow(
-                        color: color.withOpacity(0.4),
-                        blurRadius: 8,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: Icon(icon, color: Colors.white, size: 24),
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  title,
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.bold,
-                    color: color.withOpacity(0.9),
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
+  // Emergency actions removed from dashboard. Health Tips still accessible via Quick Actions section below.
 
-  void _makeEmergencyCall() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Row(
-          children: [
-            Icon(Icons.emergency, color: Colors.red),
-            SizedBox(width: 8),
-            Text('Emergency Call'),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text(
-              'Choose an emergency service:',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
-            ),
-            const SizedBox(height: 16),
-            _buildEmergencyOption(
-              'Ambulance',
-              '108',
-              Icons.local_hospital,
-              Colors.red,
-            ),
-            const SizedBox(height: 8),
-            _buildEmergencyOption(
-              'Hospital Helpline',
-              '+91-XXX-XXX-XXXX',
-              Icons.phone,
-              Colors.green,
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildEmergencyOption(
-    String title,
-    String number,
-    IconData icon,
-    Color color,
-  ) {
-    return Container(
-      width: double.infinity,
-      child: ElevatedButton.icon(
-        onPressed: () {
-          Navigator.pop(context);
-          _showCallConfirmation(title, number);
-        },
-        icon: Icon(icon),
-        label: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
-            Text(number, style: const TextStyle(fontSize: 12)),
-          ],
-        ),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: color,
-          foregroundColor: Colors.white,
-          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-          alignment: Alignment.centerLeft,
-        ),
-      ),
-    );
-  }
-
-  void _showCallConfirmation(String service, String number) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Call $service'),
-        content: Text('Do you want to call $service at $number?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              // In a real app, you would use url_launcher to make the call
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('Calling $service...'),
-                  backgroundColor: Colors.green,
-                ),
-              );
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-            child: const Text('Call'),
-          ),
-        ],
-      ),
-    );
-  }
+  // Emergency call helpers removed.
 
   void _showHealthTips() {
     showDialog(
@@ -1225,3 +851,4 @@ class _DashboardScreenState extends State<DashboardScreen>
     );
   }
 }
+

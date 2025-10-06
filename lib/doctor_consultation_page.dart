@@ -1,7 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'dart:async';
+import 'specialties.dart';
 
+/// Minimal, clean Doctor Consultation page.
+/// - Lists doctors from `doctors` (fallback to `users`)
+/// - Specialty filter
+/// - Book appointment (writes simple appointment doc)
 class DoctorConsultationPage extends StatefulWidget {
   const DoctorConsultationPage({Key? key}) : super(key: key);
 
@@ -10,412 +16,173 @@ class DoctorConsultationPage extends StatefulWidget {
 }
 
 class _DoctorConsultationPageState extends State<DoctorConsultationPage> {
+  final _firestore = FirebaseFirestore.instance;
+  StreamSubscription? _doctorsSub;
+  StreamSubscription? _usersDoctorsSub;
   String? selectedDoctorId;
   String? selectedDoctorName;
-  String selectedSpecialty = 'Cardiology';
-  String selectedTimeSlot = '09:00 AM';
+  String selectedSpecialty = 'All';
   DateTime selectedDate = DateTime.now().add(const Duration(days: 1));
-  final TextEditingController symptomsController = TextEditingController();
-  final TextEditingController notesController = TextEditingController();
+  String selectedTimeSlot = '09:00 AM';
+  final symptomsController = TextEditingController();
+  final notesController = TextEditingController();
   bool isBooking = false;
-  final List<String> specialties = [
-    'Cardiology',
-    'Dermatology',
-    'Orthopedics',
-    'Pediatrics',
-    'Gynecology',
-    'Neurology',
-    'Psychiatry',
-    'Radiology',
-  ];
-  final List<String> timeSlots = [
+
+  List<String> specialties = ['All', ...canonicalSpecialties];
+  final timeSlots = [
     '09:00 AM',
-    '09:30 AM',
     '10:00 AM',
-    '10:30 AM',
     '11:00 AM',
-    '11:30 AM',
     '02:00 PM',
-    '02:30 PM',
-    '03:00 PM',
-    '03:30 PM',
     '04:00 PM',
-    '04:30 PM',
     '05:00 PM',
-    '05:30 PM',
-    '06:00 PM',
+    '10:00 PM',
+    '11:00 PM',
   ];
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Doctor Consultation'),
-        backgroundColor: Colors.deepPurple,
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Card(
-              elevation: 4,
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(8),
-                  gradient: LinearGradient(
-                    colors: [
-                      Colors.deepPurple.shade100,
-                      Colors.deepPurple.shade50,
-                    ],
-                  ),
-                ),
-                child: Column(
-                  children: [
-                    Icon(
-                      Icons.local_hospital,
-                      size: 48,
-                      color: Colors.deepPurple,
-                    ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'HEALTHCARE MEDICAL CENTRE',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.deepPurple,
-                        letterSpacing: 1.2,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    const Text(
-                      'Book Your Consultation',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.deepPurple,
-                      ),
-                    ),
-                    const Text(
-                      'Choose your preferred doctor and time slot',
-                      style: TextStyle(color: Colors.grey),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 20),
-            _buildSectionTitle('Select Specialty'),
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: DropdownButtonFormField<String>(
-                  value: selectedSpecialty,
-                  decoration: const InputDecoration(
-                    labelText: 'Medical Specialty',
-                    border: OutlineInputBorder(),
-                  ),
-                  items: specialties
-                      .map((s) => DropdownMenuItem(value: s, child: Text(s)))
-                      .toList(),
-                  onChanged: (val) {
-                    if (val != null) setState(() => selectedSpecialty = val);
-                  },
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            _buildSectionTitle('Select Doctor'),
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: StreamBuilder<QuerySnapshot>(
-                  stream: FirebaseFirestore.instance
-                      .collection('doctors')
-                      .where('specialty', isEqualTo: selectedSpecialty)
-                      .snapshots(),
-                  builder: (context, snapshot) {
-                    if (snapshot.connectionState == ConnectionState.waiting) {
-                      return const Center(child: CircularProgressIndicator());
-                    }
-                    if (snapshot.hasError) {
-                      return Text('Error loading doctors');
-                    }
-                    final docs = snapshot.data?.docs ?? [];
-                    if (docs.isEmpty) {
-                      return const Text('No doctors found for this specialty');
-                    }
-                    return ListView.separated(
-                      shrinkWrap: true,
-                      physics: NeverScrollableScrollPhysics(),
-                      itemCount: docs.length,
-                      separatorBuilder: (context, index) => Divider(),
-                      itemBuilder: (context, index) {
-                        final data = docs[index].data() as Map<String, dynamic>;
-                        final docId = docs[index].id;
-                        final isSelected = selectedDoctorId == docId;
-                        return ListTile(
-                          leading: CircleAvatar(child: Icon(Icons.person)),
-                          title: Text(data['name'] ?? 'Doctor'),
-                          subtitle: Text(data['specialty'] ?? ''),
-                          trailing: isSelected
-                              ? Icon(
-                                  Icons.check_circle,
-                                  color: Colors.deepPurple,
-                                )
-                              : null,
-                          selected: isSelected,
-                          selectedTileColor: Colors.deepPurple.shade50,
-                          onTap: () {
-                            setState(() {
-                              selectedDoctorId = docId;
-                              selectedDoctorName = data['name'] ?? 'Doctor';
-                            });
-                          },
-                        );
-                      },
-                    );
-                  },
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            _buildSectionTitle('Select Date and Time'),
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  children: [
-                    GestureDetector(
-                      onTap: () => _selectDate(context),
-                      child: AbsorbPointer(
-                        child: TextFormField(
-                          decoration: InputDecoration(
-                            labelText: 'Appointment Date',
-                            border: const OutlineInputBorder(),
-                            suffixIcon: const Icon(Icons.calendar_today),
-                          ),
-                          controller: TextEditingController(
-                            text:
-                                '${selectedDate.day}/${selectedDate.month}/${selectedDate.year}',
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    DropdownButtonFormField<String>(
-                      value: selectedTimeSlot,
-                      decoration: const InputDecoration(
-                        labelText: 'Time Slot',
-                        border: OutlineInputBorder(),
-                      ),
-                      items: timeSlots
-                          .map(
-                            (time) => DropdownMenuItem(
-                              value: time,
-                              child: Text(time),
-                            ),
-                          )
-                          .toList(),
-                      onChanged: (val) {
-                        if (val != null) setState(() => selectedTimeSlot = val);
-                      },
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            _buildSectionTitle('Additional Information'),
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  children: [
-                    TextFormField(
-                      controller: symptomsController,
-                      decoration: const InputDecoration(
-                        labelText: 'Symptoms',
-                        border: OutlineInputBorder(),
-                      ),
-                      maxLines: 2,
-                    ),
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      controller: notesController,
-                      decoration: const InputDecoration(
-                        labelText: 'Additional Notes (optional)',
-                        border: OutlineInputBorder(),
-                      ),
-                      maxLines: 2,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 24),
-            Center(
-              child: ElevatedButton(
-                onPressed: () => _showBookingConfirmation(context),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.deepPurple,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 32,
-                    vertical: 16,
-                  ),
-                ),
-                child: const Text(
-                  'Book Appointment',
-                  style: TextStyle(fontSize: 18),
-                ),
-              ),
-            ),
-            // ...existing code...
-            // ...existing code...
-          ],
-        ),
-      ),
-    );
+  void dispose() {
+    _doctorsSub?.cancel();
+    _usersDoctorsSub?.cancel();
+    symptomsController.dispose();
+    notesController.dispose();
+    super.dispose();
   }
 
-  Widget _buildSectionTitle(String title) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8.0),
-      child: Text(
-        title,
-        style: const TextStyle(
-          fontSize: 16,
-          fontWeight: FontWeight.bold,
-          color: Colors.deepPurple,
-        ),
-      ),
-    );
+  @override
+  void initState() {
+    super.initState();
+    _loadSpecialties();
+    // subscribe to real-time updates so specialty dropdown stays current
+    _doctorsSub = _firestore.collection('doctors').snapshots().listen((snap) {
+      _loadSpecialties();
+    });
+    _usersDoctorsSub = _firestore
+        .collection('users')
+        .where('role', isEqualTo: 'doctor')
+        .snapshots()
+        .listen((snap) {
+          _loadSpecialties();
+        });
   }
 
-  Future<void> _selectDate(BuildContext context) async {
-    final DateTime? picked = await showDatePicker(
-      context: context,
-      initialDate: selectedDate,
-      firstDate: DateTime.now(),
-      lastDate: DateTime.now().add(const Duration(days: 365)),
-    );
-    if (picked != null && picked != selectedDate) {
-      setState(() {
-        selectedDate = picked;
-      });
+  Future<void> _loadSpecialties() async {
+    try {
+      final found = <String>{};
+      final dSnap = await _firestore.collection('doctors').get();
+      for (final doc in dSnap.docs) {
+        final m = doc.data();
+        final s = (m['specialty'] ?? m['specialization'] ?? '')
+            .toString()
+            .trim();
+        if (s.isNotEmpty) found.add(s);
+      }
+
+      final uSnap = await _firestore
+          .collection('users')
+          .where('role', isEqualTo: 'doctor')
+          .get();
+      for (final doc in uSnap.docs) {
+        final m = doc.data();
+        final s = (m['specialty'] ?? m['specialization'] ?? '')
+            .toString()
+            .trim();
+        if (s.isNotEmpty) found.add(s);
+      }
+
+      final merged = <String>{...canonicalSpecialties, ...found};
+      final list = merged.toList()..sort();
+      if (mounted) {
+        setState(() {
+          specialties = ['All', ...list];
+          if (!specialties.contains(selectedSpecialty))
+            selectedSpecialty = 'All';
+        });
+      }
+    } catch (_) {
+      // ignore and keep defaults
     }
   }
 
-  void _showBookingConfirmation(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Confirm Appointment'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Please confirm your appointment details:'),
-            const SizedBox(height: 12),
-            Text('Specialty: $selectedSpecialty'),
-            Text(
-              'Date: ${selectedDate.day}/${selectedDate.month}/${selectedDate.year}',
-            ),
-            Text('Time: $selectedTimeSlot'),
-            const SizedBox(height: 8),
-            const Text(
-              'Symptoms:',
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-            Text(symptomsController.text.trim()),
-            if (notesController.text.trim().isNotEmpty) ...[
-              const SizedBox(height: 8),
-              const Text(
-                'Notes:',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-              Text(notesController.text.trim()),
-            ],
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: isBooking
-                ? null
-                : () {
-                    Navigator.pop(context);
-                    _bookAppointment();
-                  },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.deepPurple,
-              foregroundColor: Colors.white,
-            ),
-            child: isBooking
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(
-                      color: Colors.white,
-                      strokeWidth: 2,
-                    ),
-                  )
-                : const Text('Confirm Booking'),
-          ),
-        ],
-      ),
-    );
+  Stream<QuerySnapshot> _doctorsStream() =>
+      _firestore.collection('doctors').snapshots();
+
+  bool _matchesSpecialty(Map<String, dynamic> data) {
+    if (selectedSpecialty == 'All') return true;
+    final s = (data['specialty'] ?? data['specialization'] ?? '')
+        .toString()
+        .toLowerCase();
+    return s.contains(selectedSpecialty.toLowerCase());
   }
 
-  void _bookAppointment() async {
+  Future<void> _backfillDoctors() async {
+    final q = await _firestore
+        .collection('users')
+        .where('role', isEqualTo: 'doctor')
+        .get();
+    final batch = _firestore.batch();
+    for (final u in q.docs) {
+      final d = u.data();
+      final ref = _firestore.collection('doctors').doc(u.id);
+      batch.set(ref, {
+        'name': d['name'] ?? d['email'] ?? '',
+        'email': d['email'] ?? '',
+        'specialty': d['specialty'] ?? d['specialization'] ?? '',
+        'specialty_normalized': (d['specialty'] ?? d['specialization'] ?? '')
+            .toString()
+            .toLowerCase(),
+        'personalId': d['personalId'] ?? '',
+        'createdAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    }
+    await batch.commit();
+    if (mounted)
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Backfill complete')));
+  }
+
+  Future<void> _bookAppointment() async {
     if (selectedDoctorId == null) {
-      _showError('Please select a doctor');
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Select a doctor')));
       return;
     }
-    setState(() {
-      isBooking = true;
-    });
+    setState(() => isBooking = true);
     try {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) {
-        _showError('User not logged in');
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Sign in first')));
         return;
       }
-      // Remove any previous appointment for this user, doctor, date, and time
-      final prev = await FirebaseFirestore.instance
-          .collection('appointments')
-          .where('patientId', isEqualTo: user.uid)
-          .where('doctorId', isEqualTo: selectedDoctorId)
-          .where('date', isEqualTo: selectedDate)
-          .where('timeSlot', isEqualTo: selectedTimeSlot)
-          .get();
-      for (final doc in prev.docs) {
-        await doc.reference.delete();
-      }
-      await FirebaseFirestore.instance.collection('appointments').add({
-        'patientId': user.uid,
+      await _firestore.collection('appointments').add({
         'doctorId': selectedDoctorId,
+        'doctorName': selectedDoctorName ?? '',
+        'patientId': user.uid,
+        'patientName': user.displayName ?? user.email ?? '',
         'specialty': selectedSpecialty,
-        'date': selectedDate,
+        'date': Timestamp.fromDate(selectedDate),
         'timeSlot': selectedTimeSlot,
         'symptoms': symptomsController.text.trim(),
         'notes': notesController.text.trim(),
         'status': 'pending',
+        'createdAt': FieldValue.serverTimestamp(),
       });
-      _showSuccess('Appointment booked successfully');
+      if (mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Appointment booked')));
       _resetForm();
     } catch (e) {
-      _showError('Error booking appointment: $e');
+      if (mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Booking failed: $e')));
     } finally {
-      setState(() {
-        isBooking = false;
-      });
+      if (mounted) setState(() => isBooking = false);
     }
   }
 
@@ -423,27 +190,147 @@ class _DoctorConsultationPageState extends State<DoctorConsultationPage> {
     setState(() {
       selectedDoctorId = null;
       selectedDoctorName = null;
-      selectedSpecialty = 'Cardiology';
-      selectedTimeSlot = '09:00 AM';
+      selectedSpecialty = 'All';
+      selectedTimeSlot = timeSlots.first;
       selectedDate = DateTime.now().add(const Duration(days: 1));
       symptomsController.clear();
       notesController.clear();
     });
   }
 
-  void _showError(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), backgroundColor: Colors.red),
+  Future<void> _pickDate() async {
+    final d = await showDatePicker(
+      context: context,
+      initialDate: selectedDate,
+      firstDate: DateTime.now(),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
     );
+    if (d != null && mounted) setState(() => selectedDate = d);
   }
 
-  void _showSuccess(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), backgroundColor: Colors.green),
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Doctor Consultation')),
+      body: Padding(
+        padding: const EdgeInsets.all(12.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Text('Specialty: '),
+                const SizedBox(width: 8),
+                DropdownButton<String>(
+                  value: selectedSpecialty,
+                  items: specialties
+                      .map((s) => DropdownMenuItem(value: s, child: Text(s)))
+                      .toList(),
+                  onChanged: (v) =>
+                      setState(() => selectedSpecialty = v ?? 'All'),
+                ),
+                const Spacer(),
+                IconButton(
+                  onPressed: () async {
+                    await _backfillDoctors();
+                    await _loadSpecialties();
+                  },
+                  icon: const Icon(Icons.refresh),
+                  tooltip: 'Refresh doctors & specialties',
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Expanded(
+              child: StreamBuilder<QuerySnapshot>(
+                stream: _doctorsStream(),
+                builder: (context, snap) {
+                  if (snap.connectionState == ConnectionState.waiting)
+                    return const Center(child: CircularProgressIndicator());
+                  final docs = snap.data?.docs ?? [];
+                  if (docs.isEmpty)
+                    return const Center(child: Text('No doctors found'));
+                  final filtered = docs
+                      .where(
+                        (d) =>
+                            _matchesSpecialty(d.data() as Map<String, dynamic>),
+                      )
+                      .toList();
+                  final list = filtered.isNotEmpty ? filtered : docs;
+                  return ListView.separated(
+                    itemCount: list.length,
+                    separatorBuilder: (_, __) => const Divider(),
+                    itemBuilder: (c, i) {
+                      final doc = list[i];
+                      final m = doc.data() as Map<String, dynamic>;
+                      final display =
+                          (m['name'] ??
+                                  m['email'] ??
+                                  m['personalId'] ??
+                                  'Doctor')
+                              .toString();
+                      return ListTile(
+                        title: Text(display),
+                        subtitle: Text(m['specialty'] ?? ''),
+                        selected: selectedDoctorId == doc.id,
+                        onTap: () => setState(() {
+                          selectedDoctorId = doc.id;
+                          selectedDoctorName = display;
+                        }),
+                      );
+                    },
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: TextButton(
+                    onPressed: _pickDate,
+                    child: Text(
+                      'Date: ${selectedDate.day}/${selectedDate.month}/${selectedDate.year}',
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: DropdownButton<String>(
+                    value: selectedTimeSlot,
+                    items: timeSlots
+                        .map((t) => DropdownMenuItem(value: t, child: Text(t)))
+                        .toList(),
+                    onChanged: (v) => setState(
+                      () => selectedTimeSlot = v ?? selectedTimeSlot,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: symptomsController,
+              decoration: const InputDecoration(labelText: 'Symptoms'),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: notesController,
+              decoration: const InputDecoration(labelText: 'Notes (optional)'),
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: isBooking ? null : _bookAppointment,
+                child: isBooking
+                    ? const CircularProgressIndicator()
+                    : const Text('Book Appointment'),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
-
-  // ...existing code...
 }
-
-// ...existing code...

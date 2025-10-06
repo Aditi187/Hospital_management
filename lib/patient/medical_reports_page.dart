@@ -61,7 +61,6 @@ class _MedicalReportsPageState extends State<MedicalReportsPage> {
             stream: FirebaseFirestore.instance
                 .collection('medical_reports')
                 .where('patientId', isEqualTo: userId)
-                .orderBy('timestamp', descending: true)
                 .snapshots(),
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
@@ -86,6 +85,15 @@ class _MedicalReportsPageState extends State<MedicalReportsPage> {
               }
 
               final reports = snapshot.data!.docs;
+              reports.sort((a, b) {
+                final aData = a.data() as Map<String, dynamic>;
+                final bData = b.data() as Map<String, dynamic>;
+                final aTs = aData['timestamp'] as Timestamp?;
+                final bTs = bData['timestamp'] as Timestamp?;
+                if (aTs == null) return 1;
+                if (bTs == null) return -1;
+                return bTs.compareTo(aTs);
+              });
 
               return ListView.builder(
                 padding: const EdgeInsets.all(16),
@@ -156,7 +164,6 @@ class _MedicalReportsPageState extends State<MedicalReportsPage> {
       stream: FirebaseFirestore.instance
           .collection('prescriptions')
           .where('patientId', isEqualTo: userId)
-          .orderBy('prescribedDate', descending: true)
           .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
