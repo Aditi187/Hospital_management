@@ -283,6 +283,15 @@ class _DoctorDashboardState extends State<DoctorDashboard>
               fontSize: 16,
             ),
           ),
+          const SizedBox(height: 8),
+          Text(
+            'ID: ${doctorData['personalId'] ?? 'N/A'}',
+            style: TextStyle(
+              color: AppTheme.onPrimary.withOpacity(0.9),
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
         ],
       ),
     );

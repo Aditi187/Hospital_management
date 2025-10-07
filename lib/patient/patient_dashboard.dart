@@ -225,6 +225,40 @@ class _DashboardScreenState extends State<DashboardScreen>
                         ],
                       ),
                     ),
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppTheme.surface.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: AppTheme.surface.withOpacity(0.2),
+                          width: 1,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.perm_identity,
+                            color: AppTheme.onPrimary.withOpacity(0.9),
+                            size: 16,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            'ID: ${userData['personalId'] ?? 'N/A'}',
+                            style: TextStyle(
+                              color: AppTheme.onPrimary.withOpacity(0.9),
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ],
                 ),
               ),

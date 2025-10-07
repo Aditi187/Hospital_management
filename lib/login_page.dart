@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:fluttertoast/fluttertoast.dart';
 import 'doctor_dashboard.dart';
 import 'patient/patient_dashboard.dart';
 import 'signup_page.dart';
@@ -67,6 +68,13 @@ class _LoginPageState extends State<LoginPage> {
 
       Map<String, dynamic> userDoc = doc.data() as Map<String, dynamic>;
       String role = userDoc['role'];
+
+      // Show success notification with user ID
+      Fluttertoast.showToast(
+        msg: "Login successful! Your ID: ${user.uid}",
+        toastLength: Toast.LENGTH_LONG,
+        gravity: ToastGravity.BOTTOM,
+      );
 
       // 🔹 Redirect based on role
       if (role == "doctor") {
