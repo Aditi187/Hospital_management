@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../theme.dart';
+import 'package:hospital_management/theme.dart';
 import '../login_page.dart';
 import 'medical_reports_page.dart';
 import 'appointment_history_page.dart';

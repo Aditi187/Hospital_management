@@ -2,7 +2,62 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
-// Abstract base class for patient information components
+// --- Theme Colors ---
+class AppTheme {
+  // ✅ Modern hospital-friendly colors
+  static const Color primary = Color(0xFF1976D2);       // Deep Blue
+  static const Color primaryLight = Color(0xFFE3F2FD);  // Light Sky Blue
+  static const Color primaryDark = Color(0xFF1565C0);   // Darker Blue
+  static const Color success = Color(0xFF28A745);       // Green
+  static const Color error = Color(0xFFDC3545);         // Red
+  static const Color muted = Color(0xFF6E7582);         // Neutral Gray
+
+  // Gradient button
+  static const List<Color> buttonGradient = [primaryLight, primary];
+
+  // ======= Animated Button =======
+  static Widget animatedButton({required String label, required VoidCallback onTap}) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 24),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: buttonGradient,
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 6, offset: Offset(2, 2))],
+        ),
+        child: Text(
+          label,
+          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+        ),
+      ),
+    );
+  }
+
+  // ======= Animated Card =======
+  static Widget animatedCard({required Widget child}) {
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0.95, end: 1.0),
+      duration: const Duration(milliseconds: 300),
+      builder: (context, scale, childWidget) {
+        return Transform.scale(scale: scale, child: childWidget);
+      },
+      child: Card(
+        elevation: 4,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        color: primaryLight,
+        child: child,
+      ),
+    );
+  }
+}
+
+// ===== Abstract Component =====
 abstract class PatientInformationComponent {
   String get title;
   IconData get icon;
@@ -10,84 +65,34 @@ abstract class PatientInformationComponent {
   Widget buildContent(BuildContext context, Map<String, dynamic> data);
 }
 
-// Patient demographics component
+// ===== Patient Demographics =====
 class PatientDemographics extends PatientInformationComponent {
   @override
   String get title => 'Personal Information';
-
   @override
   IconData get icon => Icons.person;
-
   @override
-  Color get color => Colors.blue;
+  Color get color => AppTheme.primary;
 
   @override
   Widget buildContent(BuildContext context, Map<String, dynamic> data) {
     final user = FirebaseAuth.instance.currentUser;
     return Column(
       children: [
-        _buildEditableInfoRow(
-          context,
-          user,
-          'Full Name',
-          'fullName',
-          data['fullName'] ?? 'Not provided',
-        ),
-        _buildEditableInfoRow(
-          context,
-          user,
-          'Date of Birth',
-          'dateOfBirth',
-          data['dateOfBirth'] ?? 'Not provided',
-        ),
-        _buildEditableInfoRow(
-          context,
-          user,
-          'Gender',
-          'gender',
-          data['gender'] ?? 'Not provided',
-        ),
-        _buildEditableInfoRow(
-          context,
-          user,
-          'Blood Type',
-          'bloodType',
-          data['bloodType'] ?? 'Not provided',
-        ),
-        _buildEditableInfoRow(
-          context,
-          user,
-          'Phone Number',
-          'phoneNumber',
-          data['phoneNumber'] ?? 'Not provided',
-        ),
-        _buildEditableInfoRow(
-          context,
-          user,
-          'Email',
-          'email',
-          data['email'] ?? 'Not provided',
-        ),
-        _buildEditableInfoRow(
-          context,
-          user,
-          'Address',
-          'address',
-          data['address'] ?? 'Not provided',
-        ),
+        _buildRow(context, user, 'Full Name', 'fullName', data['fullName'] ?? 'Not provided'),
+        _buildRow(context, user, 'DOB', 'dateOfBirth', data['dateOfBirth'] ?? 'Not provided'),
+        _buildRow(context, user, 'Gender', 'gender', data['gender'] ?? 'Not provided'),
+        _buildRow(context, user, 'Blood Type', 'bloodType', data['bloodType'] ?? 'Not provided'),
+        _buildRow(context, user, 'Phone', 'phoneNumber', data['phoneNumber'] ?? 'Not provided'),
+        _buildRow(context, user, 'Email', 'email', data['email'] ?? 'Not provided'),
+        _buildRow(context, user, 'Address', 'address', data['address'] ?? 'Not provided'),
       ],
     );
   }
 
-  Widget _buildEditableInfoRow(
-    BuildContext context,
-    User? user,
-    String label,
-    String field,
-    String value,
-  ) {
+  Widget _buildRow(BuildContext context, User? user, String label, String field, String value) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
+      padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -95,68 +100,45 @@ class PatientDemographics extends PatientInformationComponent {
             width: 120,
             child: Text(
               '$label:',
-              style: const TextStyle(
-                fontWeight: FontWeight.w600,
-                color: Colors.grey,
-              ),
+              style: TextStyle(fontWeight: FontWeight.w600, color: AppTheme.muted),
             ),
           ),
           Expanded(
             child: Text(
               value,
-              style: const TextStyle(fontWeight: FontWeight.w500),
+              style: TextStyle(fontWeight: FontWeight.w500, color: AppTheme.primaryDark),
             ),
           ),
-          IconButton(
-            icon: const Icon(Icons.edit, size: 18, color: Colors.teal),
-            tooltip: 'Edit $label',
-            onPressed: user == null
-                ? null
-                : () => _showEditDialog(context, user, label, field, value),
-          ),
+          if (user != null)
+            IconButton(
+              icon: Icon(Icons.edit, size: 20, color: AppTheme.primary),
+              onPressed: () => _editDialog(context, user, label, field, value),
+            ),
         ],
       ),
     );
   }
 
-  void _showEditDialog(
-    BuildContext context,
-    User user,
-    String label,
-    String field,
-    String currentValue,
-  ) {
-    final controller = TextEditingController(text: currentValue);
+  void _editDialog(BuildContext context, User user, String label, String field, String value) {
+    final controller = TextEditingController(text: value);
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: Text('Edit $label'),
-        content: TextField(
-          controller: controller,
-          decoration: InputDecoration(labelText: label),
-        ),
+        content: TextField(controller: controller, decoration: InputDecoration(labelText: label)),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          AppTheme.animatedButton(
+            label: 'Save',
+            onTap: () async {
               final newValue = controller.text.trim();
               if (newValue.isEmpty) return;
-              await FirebaseFirestore.instance
-                  .collection('patient_information')
-                  .doc(user.uid)
-                  .update({field: newValue});
+              await FirebaseFirestore.instance.collection('patient_information').doc(user.uid).update({field: newValue});
               Navigator.pop(context);
               ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('$label updated!'),
-                  backgroundColor: Colors.green,
-                ),
+                SnackBar(content: Text('$label updated!'), backgroundColor: AppTheme.success),
               );
             },
-            child: const Text('Save'),
           ),
         ],
       ),
@@ -164,60 +146,39 @@ class PatientDemographics extends PatientInformationComponent {
   }
 }
 
-// Emergency contacts component
+// ===== Emergency Contacts =====
 class EmergencyContacts extends PatientInformationComponent {
   @override
   String get title => 'Emergency Contacts';
-
   @override
   IconData get icon => Icons.emergency;
-
   @override
-  Color get color => Colors.red;
+  Color get color => AppTheme.error;
 
   @override
   Widget buildContent(BuildContext context, Map<String, dynamic> data) {
     List<dynamic> contacts = data['emergencyContacts'] ?? [];
-
-    if (contacts.isEmpty) {
-      return const Center(
-        child: Text(
-          'No emergency contacts added',
-          style: TextStyle(color: Colors.grey, fontStyle: FontStyle.italic),
-        ),
+    if (contacts.isEmpty)
+      return Center(
+        child: Text('No emergency contacts', style: TextStyle(color: AppTheme.muted, fontStyle: FontStyle.italic)),
       );
-    }
 
     return Column(
-      children: contacts.map<Widget>((contact) {
-        return Container(
-          margin: const EdgeInsets.only(bottom: 12),
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: Colors.red.shade50,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: Colors.red.shade200),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                contact['name'] ?? 'Unknown',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: Colors.red.shade800,
-                ),
+      children: contacts.map((c) {
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: AppTheme.animatedCard(
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(c['name'] ?? 'Unknown', style: TextStyle(fontWeight: FontWeight.bold, color: AppTheme.error)),
+                  Text('Relationship: ${c['relationship'] ?? 'N/A'}', style: TextStyle(color: AppTheme.error.withOpacity(0.8))),
+                  Text('Phone: ${c['phone'] ?? 'N/A'}', style: TextStyle(color: AppTheme.error.withOpacity(0.8))),
+                ],
               ),
-              const SizedBox(height: 4),
-              Text(
-                'Relationship: ${contact['relationship'] ?? 'Not specified'}',
-                style: TextStyle(color: Colors.red.shade700),
-              ),
-              Text(
-                'Phone: ${contact['phone'] ?? 'Not provided'}',
-                style: TextStyle(color: Colors.red.shade700),
-              ),
-            ],
+            ),
           ),
         );
       }).toList(),
@@ -225,202 +186,106 @@ class EmergencyContacts extends PatientInformationComponent {
   }
 }
 
-// Insurance information component
+// ===== Insurance Information =====
 class InsuranceInformation extends PatientInformationComponent {
   @override
-  String get title => 'Insurance Information';
-
+  String get title => 'Insurance Info';
   @override
   IconData get icon => Icons.shield;
-
   @override
-  Color get color => Colors.green;
+  Color get color => AppTheme.success;
 
   @override
   Widget buildContent(BuildContext context, Map<String, dynamic> data) {
     Map<String, dynamic> insurance = data['insurance'] ?? {};
-
-    if (insurance.isEmpty) {
-      return const Center(
-        child: Text(
-          'No insurance information available',
-          style: TextStyle(color: Colors.grey, fontStyle: FontStyle.italic),
-        ),
+    if (insurance.isEmpty)
+      return Center(
+        child: Text('No insurance info', style: TextStyle(color: AppTheme.muted)),
       );
-    }
 
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.green.shade50,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.green.shade200),
-      ),
-      child: Column(
-        children: [
-          _buildInsuranceRow('Provider', insurance['provider']),
-          _buildInsuranceRow('Policy Number', insurance['policyNumber']),
-          _buildInsuranceRow('Group Number', insurance['groupNumber']),
-          _buildInsuranceRow('Effective Date', insurance['effectiveDate']),
-          _buildInsuranceRow('Expiry Date', insurance['expiryDate']),
-          _buildInsuranceRow('Coverage Type', insurance['coverageType']),
-        ],
+    return AppTheme.animatedCard(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          children: [
+            _row('Provider', insurance['provider']),
+            _row('Policy', insurance['policyNumber']),
+            _row('Group', insurance['groupNumber']),
+            _row('Effective', insurance['effectiveDate']),
+            _row('Expiry', insurance['expiryDate']),
+            _row('Coverage', insurance['coverageType']),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildInsuranceRow(String label, String? value) {
+  Widget _row(String label, String? value) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(
-            width: 120,
-            child: Text(
-              '$label:',
-              style: TextStyle(
-                fontWeight: FontWeight.w600,
-                color: Colors.green.shade700,
-              ),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value ?? 'Not provided',
-              style: TextStyle(
-                fontWeight: FontWeight.w500,
-                color: Colors.green.shade800,
-              ),
-            ),
-          ),
+          SizedBox(width: 120, child: Text('$label:', style: TextStyle(fontWeight: FontWeight.w600, color: AppTheme.success.withOpacity(0.8)))),
+          Expanded(child: Text(value ?? 'N/A', style: TextStyle(fontWeight: FontWeight.w500, color: AppTheme.success))),
         ],
       ),
     );
   }
 }
 
-// Medical history summary component
+// ===== Medical History =====
 class MedicalHistorySummary extends PatientInformationComponent {
   @override
-  String get title => 'Medical History Summary';
-
+  String get title => 'Medical History';
   @override
   IconData get icon => Icons.history;
-
   @override
-  Color get color => Colors.purple;
+  Color get color => AppTheme.primaryDark;
 
   @override
   Widget buildContent(BuildContext context, Map<String, dynamic> data) {
-    Map<String, dynamic> medicalHistory = data['medicalHistory'] ?? {};
-
+    Map<String, dynamic> history = data['medicalHistory'] ?? {};
     return Column(
       children: [
-        _buildHistorySection(
-          'Chronic Conditions',
-          medicalHistory['chronicConditions'] ?? [],
-          Icons.medical_services,
-          Colors.orange,
-        ),
-        const SizedBox(height: 16),
-        _buildHistorySection(
-          'Previous Surgeries',
-          medicalHistory['surgeries'] ?? [],
-          Icons.healing,
-          Colors.blue,
-        ),
-        const SizedBox(height: 16),
-        _buildHistorySection(
-          'Family History',
-          medicalHistory['familyHistory'] ?? [],
-          Icons.family_restroom,
-          Colors.green,
-        ),
-        const SizedBox(height: 16),
-        _buildHistorySection(
-          'Current Medications',
-          medicalHistory['currentMedications'] ?? [],
-          Icons.medication,
-          Colors.red,
-        ),
+        _section('Chronic Conditions', history['chronicConditions'] ?? [], AppTheme.primary),
+        _section('Previous Surgeries', history['surgeries'] ?? [], AppTheme.primaryDark),
+        _section('Family History', history['familyHistory'] ?? [], AppTheme.success),
+        _section('Medications', history['currentMedications'] ?? [], AppTheme.error),
       ],
     );
   }
 
-  Widget _buildHistorySection(
-    String title,
-    List<dynamic> items,
-    IconData icon,
-    Color color,
-  ) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withOpacity(0.3)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+  Widget _section(String title, List<dynamic> items, Color color) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: AppTheme.animatedCard(
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(icon, color: color, size: 20),
-              const SizedBox(width: 8),
-              Text(
-                title,
-                style: TextStyle(fontWeight: FontWeight.bold, color: color),
-              ),
+              Text(title, style: TextStyle(fontWeight: FontWeight.bold, color: color)),
+              if (items.isEmpty)
+                Text('No records', style: TextStyle(color: AppTheme.muted, fontStyle: FontStyle.italic))
+              else
+                ...items.map((i) => Text('• $i', style: TextStyle(color: color.withOpacity(0.8)))),
             ],
           ),
-          const SizedBox(height: 8),
-          if (items.isEmpty)
-            Text(
-              'No records available',
-              style: TextStyle(
-                color: Colors.grey.shade600,
-                fontStyle: FontStyle.italic,
-              ),
-            )
-          else
-            ...items.map<Widget>((item) {
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 4),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('• ', style: TextStyle(color: color)),
-                    Expanded(
-                      child: Text(
-                        item.toString(),
-                        style: TextStyle(color: color.withOpacity(0.8)),
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            }).toList(),
-        ],
+        ),
       ),
     );
   }
 }
 
-// Main patient information page using composition pattern
+// ===== Main Page =====
 class PatientInformationPage extends StatefulWidget {
   const PatientInformationPage({super.key});
-
   @override
   State<PatientInformationPage> createState() => _PatientInformationPageState();
 }
 
-class _PatientInformationPageState extends State<PatientInformationPage>
-    with TickerProviderStateMixin {
+class _PatientInformationPageState extends State<PatientInformationPage> with TickerProviderStateMixin {
   late TabController _tabController;
-
-  // List of patient information components
   final List<PatientInformationComponent> _components = [
     PatientDemographics(),
     EmergencyContacts(),
@@ -443,146 +308,30 @@ class _PatientInformationPageState extends State<PatientInformationPage>
   @override
   Widget build(BuildContext context) {
     final currentUser = FirebaseAuth.instance.currentUser;
-
-    if (currentUser == null) {
-      return const Scaffold(
-        body: Center(child: Text('Please log in to view patient information')),
-      );
-    }
+    if (currentUser == null) return const Scaffold(body: Center(child: Text('Please log in')));
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          'Patient Information',
-          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
-        ),
-        backgroundColor: Colors.teal.shade600,
-        elevation: 0,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.edit, color: Colors.white),
-            onPressed: () => _editPatientInfo(context),
-            tooltip: 'Edit Information',
-          ),
-          IconButton(
-            icon: const Icon(Icons.delete_forever, color: Colors.white),
-            onPressed: () => _clearMyData(context),
-            tooltip: 'Clear My Data',
-          ),
-        ],
+        title: const Text('Patient Information', style: TextStyle(fontWeight: FontWeight.bold)),
+        backgroundColor: AppTheme.primary,
         bottom: TabBar(
           controller: _tabController,
           indicatorColor: Colors.white,
-          labelColor: Colors.white,
-          unselectedLabelColor: Colors.white70,
-          isScrollable: true,
-          tabs: _components.map((component) {
-            return Tab(icon: Icon(component.icon), text: component.title);
-          }).toList(),
+          tabs: _components.map((c) => Tab(icon: Icon(c.icon), text: c.title)).toList(),
         ),
       ),
       body: StreamBuilder<DocumentSnapshot>(
-        stream: FirebaseFirestore.instance
-            .collection('patient_information')
-            .doc(currentUser.uid)
-            .snapshots(),
+        stream: FirebaseFirestore.instance.collection('patient_information').doc(currentUser.uid).snapshots(),
         builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-
-          Map<String, dynamic> patientData = {};
-          if (snapshot.hasData && snapshot.data!.exists) {
-            patientData = snapshot.data!.data() as Map<String, dynamic>;
-          }
-
+          if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+          Map<String, dynamic> data = {};
+          if (snapshot.hasData && snapshot.data!.exists) data = snapshot.data!.data() as Map<String, dynamic>;
           return TabBarView(
             controller: _tabController,
-            children: _components.map((component) {
-              return SingleChildScrollView(
-                padding: const EdgeInsets.all(16),
-                child: Card(
-                  elevation: 4,
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Icon(
-                              component.icon,
-                              color: component.color,
-                              size: 28,
-                            ),
-                            const SizedBox(width: 12),
-                            Text(
-                              component.title,
-                              style: TextStyle(
-                                fontSize: 20,
-                                fontWeight: FontWeight.bold,
-                                color: component.color,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 20),
-                        component.buildContent(context, patientData),
-                      ],
-                    ),
-                  ),
-                ),
-              );
-            }).toList(),
+            children: _components.map((c) => SingleChildScrollView(padding: const EdgeInsets.all(16), child: c.buildContent(context, data))).toList(),
           );
         },
       ),
     );
-  }
-
-  void _editPatientInfo(BuildContext context) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Edit functionality would be implemented here'),
-        backgroundColor: Colors.blue,
-      ),
-    );
-  }
-
-  Future<void> _clearMyData(BuildContext context) async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
-    final uid = user.uid;
-    try {
-      // Delete patient information
-      await FirebaseFirestore.instance
-          .collection('patient_information')
-          .doc(uid)
-          .delete();
-      // Delete all appointments for this user
-      final appointments = await FirebaseFirestore.instance
-          .collection('appointments')
-          .where('patientId', isEqualTo: uid)
-          .get();
-      for (final doc in appointments.docs) {
-        await doc.reference.delete();
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Your patient info and appointments have been cleared.',
-          ),
-          backgroundColor: Colors.green,
-        ),
-      );
-      setState(() {});
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error clearing data: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
-    }
   }
 }
