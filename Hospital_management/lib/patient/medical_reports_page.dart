@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:hospital_management/theme.dart';
-import 'medicine_ordering_page.dart';
 
 class MedicalReportsPage extends StatefulWidget {
   const MedicalReportsPage({Key? key}) : super(key: key);
@@ -127,6 +126,34 @@ class _MedicalReportsPageState extends State<MedicalReportsPage> {
                                   ),
                                 ),
                               ),
+                              // Show prescription badge if linked
+                              if (data['hasPrescription'] == true)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 4,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: Colors.green,
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.medication, size: 12, color: Colors.white),
+                                      SizedBox(width: 4),
+                                      Text(
+                                        'Prescribed',
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              SizedBox(width: 8),
                               Text(
                                 _formatDate(data['timestamp']),
                                 style: TextStyle(
@@ -145,6 +172,39 @@ class _MedicalReportsPageState extends State<MedicalReportsPage> {
                             _buildInfoRow('Treatment', data['treatment']),
                           if (data['notes'] != null)
                             _buildInfoRow('Notes', data['notes']),
+                          
+                          // Show prescription cost if available
+                          if (data['hasPrescription'] == true && data['prescriptionTotalCost'] != null)
+                            Container(
+                              margin: EdgeInsets.only(top: 8),
+                              padding: EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: Colors.green.shade50,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: Colors.green.shade200),
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text(
+                                    'Prescription Cost:',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.green.shade800,
+                                    ),
+                                  ),
+                                  Text(
+                                    '₹${data['prescriptionTotalCost']?.toStringAsFixed(2) ?? '0.00'}',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.green.shade800,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          
                           if (data['prescriptions'] != null)
                             _buildPrescriptionList(data['prescriptions']),
                         ],
@@ -193,6 +253,12 @@ class _MedicalReportsPageState extends State<MedicalReportsPage> {
             final prescription = prescriptions[index];
             final data = prescription.data() as Map<String, dynamic>;
 
+            // Check if it's the new array format or old single format
+            final hasMedicineArray = data['medicines'] != null;
+            final medicines = hasMedicineArray 
+                ? (data['medicines'] as List<dynamic>)
+                : [];
+
             return Card(
               margin: const EdgeInsets.only(bottom: 16),
               elevation: 3,
@@ -201,13 +267,16 @@ class _MedicalReportsPageState extends State<MedicalReportsPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // Header with status
                     Row(
                       children: [
                         Icon(Icons.medication, color: AppTheme.primaryVariant),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            data['medicineName'] ?? 'Medicine',
+                            hasMedicineArray && medicines.isNotEmpty
+                                ? '${medicines.length} Medicine${medicines.length > 1 ? 's' : ''}'
+                                : data['medicineName'] ?? 'Prescription',
                             style: const TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.bold,
@@ -224,7 +293,7 @@ class _MedicalReportsPageState extends State<MedicalReportsPage> {
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: Text(
-                            data['status'] ?? 'Pending',
+                            data['status'] ?? 'Prescribed',
                             style: const TextStyle(
                               color: Colors.white,
                               fontSize: 12,
@@ -235,34 +304,116 @@ class _MedicalReportsPageState extends State<MedicalReportsPage> {
                       ],
                     ),
                     const SizedBox(height: 12),
+                    
+                    // Doctor info
                     _buildInfoRow('Doctor', data['doctorName'] ?? 'N/A'),
-                    _buildInfoRow('Dosage', data['dosage'] ?? 'N/A'),
-                    _buildInfoRow('Frequency', data['frequency'] ?? 'N/A'),
+                    
+                    // Display medicines list if array format
+                    if (hasMedicineArray && medicines.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      const Text(
+                        'Medicines:',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: AppTheme.primaryVariant,
+                        ),
+                      ),
+                      ...medicines.asMap().entries.map((entry) {
+                        final idx = entry.key;
+                        final medicine = entry.value as Map<String, dynamic>;
+                        return Container(
+                          margin: EdgeInsets.only(top: 8),
+                          padding: EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade50,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text(
+                                    '${idx + 1}. ${medicine['name'] ?? 'Medicine'}',
+                                    style: TextStyle(fontWeight: FontWeight.w600),
+                                  ),
+                                  if (medicine['cost'] != null && medicine['cost'] > 0)
+                                    Text(
+                                      '₹${medicine['cost']?.toStringAsFixed(2) ?? '0.00'}',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        color: AppTheme.primaryVariant,
+                                      ),
+                                    ),
+                                ],
+                              ),
+                              if (medicine['dosage'] != null)
+                                Padding(
+                                  padding: const EdgeInsets.only(left: 8, top: 4),
+                                  child: Text(
+                                    'Dosage: ${medicine['dosage']} ${medicine['frequency'] ?? ''}',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: AppTheme.muted,
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        );
+                      }).toList(),
+                    ] else ...[
+                      // Fallback to single medicine display for old format
+                      _buildInfoRow('Medicine', data['medicineName'] ?? 'N/A'),
+                      _buildInfoRow('Dosage', data['dosage'] ?? 'N/A'),
+                      _buildInfoRow('Frequency', data['frequency'] ?? 'N/A'),
+                    ],
+                    
+                    // Common fields
                     _buildInfoRow('Duration', data['duration'] ?? 'N/A'),
                     _buildInfoRow(
                       'Instructions',
                       data['instructions'] ?? 'N/A',
                     ),
+                    
+                    // Total Cost Display (prominent)
+                    if (data['totalCost'] != null && data['totalCost'] > 0)
+                      Container(
+                        margin: EdgeInsets.only(top: 12),
+                        padding: EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: AppTheme.primaryLight,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: AppTheme.primary),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'Total Prescription Cost:',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: AppTheme.primaryVariant,
+                                fontSize: 16,
+                              ),
+                            ),
+                            Text(
+                              '₹${data['totalCost']?.toStringAsFixed(2) ?? '0.00'}',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                color: AppTheme.primaryVariant,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    
                     _buildInfoRow(
                       'Prescribed',
                       _formatDate(data['prescribedDate']),
                     ),
-                    const SizedBox(height: 12),
-                    if (data['status'] == 'Prescribed')
-                      ElevatedButton.icon(
-                        onPressed: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => const MedicineOrderingPage(),
-                          ),
-                        ),
-                        icon: const Icon(Icons.shopping_cart),
-                        label: const Text('Order Medicine'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppTheme.primaryVariant,
-                          foregroundColor: AppTheme.onPrimary,
-                        ),
-                      ),
                   ],
                 ),
               ),

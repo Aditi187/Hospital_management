@@ -194,6 +194,41 @@ class _DashboardScreenState extends State<DashboardScreen>
                       ],
                     ),
                     const SizedBox(height: 8),
+                    // Patient ID Display Box
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppTheme.surface.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: AppTheme.surface.withOpacity(0.3),
+                          width: 1.5,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.badge,
+                            size: 16,
+                            color: AppTheme.onPrimary.withOpacity(0.9),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Patient ID: ${userData['patientId'] ?? 'N/A'}',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              color: AppTheme.onPrimary.withOpacity(0.95),
+                              fontSize: 14,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 8),
                     Container(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 12,
@@ -578,7 +613,7 @@ class _DashboardScreenState extends State<DashboardScreen>
             children: [
               _buildActionCard(
                 'Doctor Consultation',
-                Icons.video_call,
+                Icons.book_online,
                 AppTheme.primaryVariant,
                 () => Navigator.push(
                   context,

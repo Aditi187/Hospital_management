@@ -190,9 +190,9 @@ class _DoctorDashboardState extends State<DoctorDashboard>
                                         name.isNotEmpty
                                             ? name[0].toUpperCase()
                                             : 'P',
-                                        style: TextStyle(
+                                        style: const TextStyle(
                                           fontWeight: FontWeight.bold,
-                                          color: AppTheme.onPrimary,
+                                          color: Colors.white,
                                         ),
                                       ),
                                     ),
@@ -235,58 +235,109 @@ class _DoctorDashboardState extends State<DoctorDashboard>
   }
 
   Widget _buildWelcomeSection() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(28),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [AppTheme.primary, AppTheme.primaryVariant],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
+  return Container(
+    width: double.infinity,
+    padding: const EdgeInsets.all(28),
+    decoration: BoxDecoration(
+      gradient: LinearGradient(
+        colors: [AppTheme.primary, AppTheme.primaryVariant],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+      ),
+      borderRadius: BorderRadius.circular(24),
+      boxShadow: [
+        BoxShadow(
+          color: AppTheme.primary.withOpacity(0.28),
+          blurRadius: 20,
+          offset: const Offset(0, 10),
+          spreadRadius: 3,
         ),
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: AppTheme.primary.withOpacity(0.28),
-            blurRadius: 20,
-            offset: const Offset(0, 10),
-            spreadRadius: 3,
+      ],
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Welcome,',
+          style: TextStyle(
+            color: AppTheme.onPrimary.withOpacity(0.95),
+            fontSize: 24,
+            fontWeight: FontWeight.w500,
           ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Welcome,',
-            style: TextStyle(
-              color: AppTheme.onPrimary.withOpacity(0.95),
-              fontSize: 24,
-              fontWeight: FontWeight.w500,
+        ),
+        const SizedBox(height: 8),
+        Text(
+          doctorData['name'] ?? 'Doctor',
+          style: const TextStyle(
+            color: AppTheme.onPrimary,
+            fontSize: 32,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 0.5,
+          ),
+        ),
+        const SizedBox(height: 8),
+        // Combined Doctor ID and Email Display Box
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: AppTheme.surface.withOpacity(0.15),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: AppTheme.surface.withOpacity(0.3),
+              width: 1.5,
             ),
           ),
-          const SizedBox(height: 8),
-          Text(
-            doctorData['name'] ?? 'Doctor',
-            style: const TextStyle(
-              color: AppTheme.onPrimary,
-              fontSize: 32,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 0.5,
-            ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Doctor ID Row
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.badge,
+                    size: 16,
+                    color: AppTheme.onPrimary.withOpacity(0.9),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Doctor ID: ${doctorData['doctorId'] ?? doctorData['id'] ?? 'N/A'}',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.onPrimary.withOpacity(0.95),
+                      fontSize: 14,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              // Email Row
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.email,
+                    size: 16,
+                    color: AppTheme.onPrimary.withOpacity(0.9),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    doctorData['email'] ?? 'No email',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w500,
+                      color: AppTheme.onPrimary.withOpacity(0.9),
+                      fontSize: 14,
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ),
-          const SizedBox(height: 8),
-          Text(
-            doctorData['email'] ?? '',
-            style: TextStyle(
-              color: AppTheme.onPrimary.withOpacity(0.9),
-              fontSize: 16,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+        ),
+      ],
+    ),
+  );
+}
 
   Widget _buildDrawer(BuildContext context) {
     return Drawer(
@@ -980,7 +1031,7 @@ class PrescriptionsTab extends StatelessWidget {
                     ),
                     const SizedBox(height: 12),
                     _buildInfoRow('Doctor', data['doctorName'] ?? 'N/A'),
-                    _buildInfoRow('Dosage', data['dosage'] ?? 'N/A'),
+                    _buildInfoRow('Quantity', data['quantity'] ?? 'N/A'),
                     _buildInfoRow('Frequency', data['frequency'] ?? 'N/A'),
                     _buildInfoRow('Duration', data['duration'] ?? 'N/A'),
                     _buildInfoRow(
@@ -994,7 +1045,7 @@ class PrescriptionsTab extends StatelessWidget {
                     if (data['totalCost'] != null)
                       _buildInfoRow(
                         'Total Cost',
-                        '\$${data['totalCost']?.toStringAsFixed(2) ?? '0.00'}',
+                        '₹${data['totalCost']?.toStringAsFixed(2) ?? '0.00'}',
                       ),
                   ],
                 ),
@@ -1144,9 +1195,9 @@ class _AddRecordTabState extends State<AddRecordTab>
     });
   }
 
-  void _updateDosage(int index, String dosage) {
+  void _updateQuantity(int index, String quantity) {
     setState(() {
-      _medicineItems[index].dosage = dosage;
+      _medicineItems[index].quantity = quantity;
       _calculateTotalCost();
     });
   }
@@ -1154,7 +1205,7 @@ class _AddRecordTabState extends State<AddRecordTab>
   void _updateFrequency(int index, String frequency) {
     setState(() {
       _medicineItems[index].frequency = frequency;
-      _calculateTotalCost();
+      // Frequency no longer affects cost calculation
     });
   }
 
@@ -1163,28 +1214,18 @@ class _AddRecordTabState extends State<AddRecordTab>
     int durationDays = int.tryParse(_durationController.text) ?? 0;
 
     for (var item in _medicineItems) {
-      if (item.medicine != null && item.dosage.isNotEmpty && item.frequency.isNotEmpty) {
-        double dosageValue = double.tryParse(item.dosage) ?? 0;
-        int frequencyValue = _getFrequencyValue(item.frequency);
-        double dailyCost = dosageValue * frequencyValue * item.medicine!.pricePerUnit;
-        total += dailyCost * durationDays;
-        item.cost = dailyCost * durationDays;
+      if (item.medicine != null && item.quantity.isNotEmpty) {
+        double quantityValue = double.tryParse(item.quantity) ?? 0;
+        // Cost calculation: medicine price × quantity × duration
+        double medicineCost = quantityValue * item.medicine!.pricePerUnit * durationDays;
+        total += medicineCost;
+        item.cost = medicineCost;
       }
     }
 
     setState(() {
       _totalCost = total;
     });
-  }
-
-  int _getFrequencyValue(String frequency) {
-    switch (frequency) {
-      case 'Once daily': return 1;
-      case 'Twice daily': return 2;
-      case 'Three times daily': return 3;
-      case 'Four times daily': return 4;
-      default: return 0;
-    }
   }
 
   List<Medicine> _getAvailableMedicines(int currentIndex) {
@@ -1255,7 +1296,7 @@ class _AddRecordTabState extends State<AddRecordTab>
         'doctorName': widget.doctorName,
         'medicines': selectedMedicines.map((item) => {
           'name': item.medicine!.name,
-          'dosage': item.dosage,
+          'quantity': item.quantity,
           'frequency': item.frequency,
           'cost': item.cost,
         }).toList(),
@@ -1543,17 +1584,17 @@ class _AddRecordTabState extends State<AddRecordTab>
             
             const SizedBox(height: 12),
             
-            // Dosage and Frequency in a row
+            // Quantity and Frequency in a row
             Row(
               children: [
                 Expanded(
                   child: TextFormField(
                     decoration: const InputDecoration(
-                      labelText: 'Dosage (units)',
+                      labelText: 'Quantity (units)',
                       border: OutlineInputBorder(),
                     ),
                     keyboardType: TextInputType.number,
-                    onChanged: (value) => _updateDosage(index, value),
+                    onChanged: (value) => _updateQuantity(index, value),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -1604,7 +1645,7 @@ class Medicine {
 
 class MedicineItem {
   Medicine? medicine;
-  String dosage = '';
+  String quantity = '';
   String frequency = '';
   double cost = 0.0;
 
