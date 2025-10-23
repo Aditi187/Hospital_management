@@ -18,9 +18,6 @@ class _SignupPageState extends State<SignupPage> {
   final TextEditingController nameController = TextEditingController();
   final TextEditingController emailController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
-  final TextEditingController ageController = TextEditingController();
-  final TextEditingController weightController = TextEditingController();
-  final TextEditingController heightController = TextEditingController();
   final TextEditingController specialtyController = TextEditingController();
   final TextEditingController experienceController = TextEditingController();
 
@@ -75,12 +72,13 @@ class _SignupPageState extends State<SignupPage> {
           'personalId': personalId,
           'createdAt': Timestamp.now(),
         };
+        
+        // For patients, only store blood group during signup
         if (selectedRole == 'Patient') {
-          udata['basicHealthInfo'] = {
-            'bloodGroup': selectedBloodGroup ?? '',
-            'weight': weightController.text.trim(),
-            'height': heightController.text.trim(),
-          };
+          udata['bloodGroup'] = selectedBloodGroup ?? '';
+          // Weight and height will be added later through patient dashboard
+          udata['weight'] = ''; // Initialize as empty
+          udata['height'] = ''; // Initialize as empty
         } else {
           udata['specialization'] = specialtyController.text.trim();
           udata['experience'] = experienceController.text.trim();
@@ -106,6 +104,7 @@ class _SignupPageState extends State<SignupPage> {
             'createdAt': Timestamp.now(),
           });
         }
+        
         // write a reverse index for personalId -> uid to speed up login by ID
         final indexRef = FirebaseFirestore.instance
             .collection('personalIdIndex')
@@ -180,9 +179,6 @@ class _SignupPageState extends State<SignupPage> {
     nameController.dispose();
     emailController.dispose();
     passwordController.dispose();
-    ageController.dispose();
-    weightController.dispose();
-    heightController.dispose();
     specialtyController.dispose();
     experienceController.dispose();
     super.dispose();
@@ -245,12 +241,6 @@ class _SignupPageState extends State<SignupPage> {
             ),
             const SizedBox(height: 12),
             if (selectedRole == 'Patient') ...[
-              TextField(
-                controller: ageController,
-                decoration: const InputDecoration(labelText: 'Age'),
-                keyboardType: TextInputType.number,
-              ),
-              const SizedBox(height: 8),
               DropdownButtonFormField<String>(
                 value: selectedBloodGroup,
                 decoration: const InputDecoration(labelText: 'Blood group'),
@@ -258,6 +248,22 @@ class _SignupPageState extends State<SignupPage> {
                     .map((e) => DropdownMenuItem(value: e, child: Text(e)))
                     .toList(),
                 onChanged: (v) => setState(() => selectedBloodGroup = v),
+              ),
+              const SizedBox(height: 8),
+              // Note: Weight and height removed from signup - will be collected in dashboard
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.blue[50],
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Text(
+                  'Note: Weight and height can be added later in your dashboard profile',
+                  style: TextStyle(
+                    fontSize: 12,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
               ),
             ] else ...[
               DropdownButtonFormField<String>(

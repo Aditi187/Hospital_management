@@ -91,7 +91,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                         _buildWelcomeSection(userData),
                         const SizedBox(height: 16),
 
-                        // Patient information (phone, DOB, gender, address)
+                        // Patient information (phone, DOB, gender, address, weight, height)
                         _buildPatientInfoSection(userData),
                         const SizedBox(height: 24),
 
@@ -218,7 +218,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                           ),
                           const SizedBox(width: 8),
                           Text(
-                            'Patient ID: ${userData['patientId'] ?? 'N/A'}',
+                            'Patient ID: ${userData['personalId'] ?? 'N/A'}',
                             style: TextStyle(
                               fontWeight: FontWeight.w600,
                               color: AppTheme.onPrimary.withOpacity(0.95),
@@ -270,99 +270,117 @@ class _DashboardScreenState extends State<DashboardScreen>
     );
   }
 
-  Widget _buildPatientInfoSection(Map<String, dynamic> userData) {
-    final phone = userData['phone'] ?? 'N/A';
-    final dob = userData['dateOfBirth'] ?? 'N/A';
-    final gender = userData['gender'] ?? 'N/A';
-    final address = userData['address'] ?? 'N/A';
+Widget _buildPatientInfoSection(Map<String, dynamic> userData) {
+  final phone = userData['phone'] ?? 'Not set';
+  final dob = userData['dateOfBirth'] ?? 'Not set';
+  final gender = userData['gender'] ?? 'Not set';
+  final address = userData['address'] ?? 'Not set';
+  final bloodGroup = userData['bloodGroup'] ?? 'Not set';
+  
+  // Handle weight and height with proper formatting
+  final weight = userData['weight'];
+  final height = userData['height'];
+  
+  String weightDisplay = (weight != null && weight.toString().isNotEmpty && weight != '') 
+      ? '$weight kg' 
+      : 'Not set';
+  String heightDisplay = (height != null && height.toString().isNotEmpty && height != '') 
+      ? '$height cm' 
+      : 'Not set';
 
-    Widget infoRow(String label, String value, {IconData? icon}) {
-      return Row(
-        children: [
-          if (icon != null) Icon(icon, size: 18, color: AppTheme.muted),
-          if (icon != null) const SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: const TextStyle(fontWeight: FontWeight.w600),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  value.toString(),
-                  style: TextStyle(color: Colors.grey[800]),
-                ),
-              ],
-            ),
-          ),
-        ],
-      );
-    }
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: AppTheme.surface,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: AppTheme.muted.withOpacity(0.12),
-            blurRadius: 10,
-            offset: const Offset(0, 6),
-          ),
-        ],
-        border: Border.all(color: AppTheme.muted.withOpacity(0.06)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+  Widget infoRow(String label, String value, {IconData? icon}) {
+    return Row(
+      children: [
+        if (icon != null) Icon(icon, size: 18, color: AppTheme.muted),
+        if (icon != null) const SizedBox(width: 8),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: AppTheme.primaryLight,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(Icons.info_outline, color: AppTheme.primary),
+              Text(
+                label,
+                style: const TextStyle(fontWeight: FontWeight.w600),
               ),
-              const SizedBox(width: 12),
-              const Expanded(
-                child: Text(
-                  'Patient Information',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              const SizedBox(height: 4),
+              Text(
+                value,
+                style: TextStyle(
+                  color: value == 'Not set' ? Colors.orange : Colors.grey[800],
                 ),
-              ),
-              IconButton(
-                tooltip: 'Edit patient information',
-                onPressed: () => _editPatientInfo(userData),
-                icon: Icon(Icons.edit, color: AppTheme.primary),
               ),
             ],
           ),
-          const SizedBox(height: 12),
-          infoRow('Phone', phone.toString(), icon: Icons.phone),
-          const SizedBox(height: 8),
-          infoRow('Date of Birth', dob.toString(), icon: Icons.cake),
-          const SizedBox(height: 8),
-          infoRow('Gender', gender.toString(), icon: Icons.person),
-          const SizedBox(height: 8),
-          infoRow('Address', address.toString(), icon: Icons.location_on),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
-  // Health info cards removed from dashboard; kept in profile_page for editing/viewing.
+  return Container(
+    width: double.infinity,
+    padding: const EdgeInsets.all(18),
+    decoration: BoxDecoration(
+      color: AppTheme.surface,
+      borderRadius: BorderRadius.circular(16),
+      boxShadow: [
+        BoxShadow(
+          color: AppTheme.muted.withOpacity(0.12),
+          blurRadius: 10,
+          offset: const Offset(0, 6),
+        ),
+      ],
+      border: Border.all(color: AppTheme.muted.withOpacity(0.06)),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: AppTheme.primaryLight,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(Icons.info_outline, color: AppTheme.primary),
+            ),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Text(
+                'Patient Information',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+            ),
+            IconButton(
+              tooltip: 'Edit patient information',
+              onPressed: () => _editPatientInfo(userData),
+              icon: Icon(Icons.edit, color: AppTheme.primary),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        infoRow('Phone', phone.toString(), icon: Icons.phone),
+        const SizedBox(height: 8),
+        infoRow('Date of Birth', dob.toString(), icon: Icons.cake),
+        const SizedBox(height: 8),
+        infoRow('Gender', gender.toString(), icon: Icons.person),
+        const SizedBox(height: 8),
+        infoRow('Blood Group', bloodGroup.toString(), icon: Icons.bloodtype),
+        const SizedBox(height: 8),
+        infoRow('Address', address.toString(), icon: Icons.location_on),
+        const SizedBox(height: 8),
+        infoRow('Weight', weightDisplay, icon: Icons.monitor_weight),
+        const SizedBox(height: 8),
+        infoRow('Height', heightDisplay, icon: Icons.height),
+      ],
+    ),
+  );
+}
 
   Widget _buildRecentPrescriptionsSection(String userId) {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
           .collection('prescriptions')
-          .where('patientId', isEqualTo: userId)
+          .where('personalId', isEqualTo: userId)
           .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
@@ -542,8 +560,6 @@ class _DashboardScreenState extends State<DashboardScreen>
       },
     );
   }
-
-  // _getStatusColor removed: status styling is handled directly via AppTheme
 
   Widget _buildQuickActionsSection() {
     return Container(
@@ -837,12 +853,6 @@ class _DashboardScreenState extends State<DashboardScreen>
     );
   }
 
-  // Emergency actions removed from dashboard. Health Tips still accessible via Quick Actions section below.
-
-  // Emergency actions removed from dashboard. Health Tips still accessible via Quick Actions section below.
-
-  // Emergency call helpers removed.
-
   void _showHealthTips() {
     showDialog(
       context: context,
@@ -914,100 +924,126 @@ class _DashboardScreenState extends State<DashboardScreen>
     );
   }
 
-  void _editPatientInfo(Map<String, dynamic> userData) {
-    final phoneController = TextEditingController(
-      text: userData['phone'] ?? '',
-    );
-    final dobController = TextEditingController(
-      text: userData['dateOfBirth'] ?? '',
-    );
-    final addressController = TextEditingController(
-      text: userData['address'] ?? '',
-    );
-    String selectedGender = userData['gender'] ?? 'Male';
+void _editPatientInfo(Map<String, dynamic> userData) {
+  final phoneController = TextEditingController(
+    text: userData['phone'] ?? '',
+  );
+  final dobController = TextEditingController(
+    text: userData['dateOfBirth'] ?? '',
+  );
+  final addressController = TextEditingController(
+    text: userData['address'] ?? '',
+  );
+  final weightController = TextEditingController(
+    text: userData['weight']?.toString() ?? '',
+  );
+  final heightController = TextEditingController(
+    text: userData['height']?.toString() ?? '',
+  );
+  String selectedGender = userData['gender'] ?? 'Male';
 
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Edit Patient Information'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: phoneController,
-                decoration: const InputDecoration(labelText: 'Phone'),
-                keyboardType: TextInputType.phone,
+  showDialog(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text('Edit Patient Information'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: phoneController,
+              decoration: const InputDecoration(labelText: 'Phone'),
+              keyboardType: TextInputType.phone,
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: dobController,
+              decoration: const InputDecoration(
+                labelText: 'Date of Birth (DD/MM/YYYY)',
               ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: dobController,
-                decoration: const InputDecoration(
-                  labelText: 'Date of Birth (DD/MM/YYYY)',
-                ),
-              ),
-              const SizedBox(height: 12),
-              DropdownButtonFormField<String>(
-                value: selectedGender,
-                decoration: const InputDecoration(labelText: 'Gender'),
-                items: ['Male', 'Female', 'Other']
-                    .map((g) => DropdownMenuItem(value: g, child: Text(g)))
-                    .toList(),
-                onChanged: (v) => selectedGender = v ?? selectedGender,
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: addressController,
-                decoration: const InputDecoration(labelText: 'Address'),
-                maxLines: 2,
-              ),
-            ],
-          ),
+            ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<String>(
+              value: selectedGender,
+              decoration: const InputDecoration(labelText: 'Gender'),
+              items: ['Male', 'Female', 'Other']
+                  .map((g) => DropdownMenuItem(value: g, child: Text(g)))
+                  .toList(),
+              onChanged: (v) => selectedGender = v ?? selectedGender,
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: weightController,
+              decoration: const InputDecoration(labelText: 'Weight (kg)'),
+              keyboardType: TextInputType.numberWithOptions(decimal: true),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: heightController,
+              decoration: const InputDecoration(labelText: 'Height (cm)'),
+              keyboardType: TextInputType.numberWithOptions(decimal: true),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: addressController,
+              decoration: const InputDecoration(labelText: 'Address'),
+              maxLines: 2,
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              final user = FirebaseAuth.instance.currentUser;
-              if (user == null) return;
-
-              final updates = {
-                'phone': phoneController.text.trim(),
-                'dateOfBirth': dobController.text.trim(),
-                'gender': selectedGender,
-                'address': addressController.text.trim(),
-              };
-
-              try {
-                await FirebaseFirestore.instance
-                    .collection('users')
-                    .doc(user.uid)
-                    .set(updates, SetOptions(merge: true));
-                if (context.mounted) {
-                  Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Patient information updated'),
-                    ),
-                  );
-                }
-              } catch (e) {
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Failed to update: $e')),
-                  );
-                }
-              }
-            },
-            child: const Text('Save'),
-          ),
-        ],
       ),
-    );
-  }
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        ElevatedButton(
+          onPressed: () async {
+            final user = FirebaseAuth.instance.currentUser;
+            if (user == null) return;
+
+            // Parse weight and height properly
+            String weightValue = weightController.text.trim();
+            String heightValue = heightController.text.trim();
+
+            final updates = {
+              'phone': phoneController.text.trim(),
+              'dateOfBirth': dobController.text.trim(),
+              'gender': selectedGender,
+              'weight': weightValue.isNotEmpty ? weightValue : null,
+              'height': heightValue.isNotEmpty ? heightValue : null,
+              'address': addressController.text.trim(),
+              'updatedAt': FieldValue.serverTimestamp(),
+            };
+
+            try {
+              await FirebaseFirestore.instance
+                  .collection('users')
+                  .doc(user.uid)
+                  .set(updates, SetOptions(merge: true));
+              
+              if (context.mounted) {
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Patient information updated successfully'),
+                  ),
+                );
+              }
+            } catch (e) {
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Failed to update: $e')),
+                );
+              }
+            }
+          },
+          child: const Text('Save'),
+        ),
+      ],
+    ),
+  );
+}
 
   Widget _buildHealthTip(
     IconData icon,

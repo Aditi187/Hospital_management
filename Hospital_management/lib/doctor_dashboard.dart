@@ -301,7 +301,7 @@ class _DoctorDashboardState extends State<DoctorDashboard>
                   ),
                   const SizedBox(width: 8),
                   Text(
-                    'Doctor ID: ${doctorData['doctorId'] ?? doctorData['id'] ?? 'N/A'}',
+                    'Doctor ID: ${doctorData['personalId'] ?? doctorData['doctorId'] ?? doctorData['id'] ?? 'N/A'}',
                     style: TextStyle(
                       fontWeight: FontWeight.w600,
                       color: AppTheme.onPrimary.withOpacity(0.95),
@@ -465,6 +465,8 @@ class _PatientDetailsDialogState extends State<PatientDetailsDialog>
           'isApproved': data['isApproved'] ?? false,
           'isRejected': data['isRejected'] ?? false,
           'notes': data['notes'] ?? '',
+          'createdAt': data['createdAt'],
+          'appointmentDate': data['appointmentDate'], // Added for appointment booking date
         };
       }).toList();
     } catch (e) {
@@ -601,12 +603,41 @@ class _PatientDetailsDialogState extends State<PatientDetailsDialog>
                             color: AppTheme.muted.withOpacity(0.9),
                           ),
                         ),
-                        Text(
-                          'Patient ID: $patientId',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: AppTheme.muted.withOpacity(0.8),
-                          ),
+                        // CHANGED: Display personalId instead of Firebase UID
+                        FutureBuilder<DocumentSnapshot>(
+                          future: FirebaseFirestore.instance
+                              .collection('users')
+                              .doc(patientId)
+                              .get(),
+                          builder: (context, snapshot) {
+                            if (snapshot.connectionState == ConnectionState.waiting) {
+                              return Text(
+                                'Patient ID: Loading...',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: AppTheme.muted.withOpacity(0.8),
+                                ),
+                              );
+                            }
+                            if (snapshot.hasError || !snapshot.hasData) {
+                              return Text(
+                                'Patient ID: $patientId',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: AppTheme.muted.withOpacity(0.8),
+                                ),
+                              );
+                            }
+                            final userData = snapshot.data!.data() as Map<String, dynamic>?;
+                            final personalId = userData?['personalId'] ?? patientId;
+                            return Text(
+                              'Patient ID: $personalId',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: AppTheme.muted.withOpacity(0.8),
+                              ),
+                            );
+                          },
                         ),
                       ],
                     ),
@@ -677,11 +708,21 @@ class _PatientDetailsDialogState extends State<PatientDetailsDialog>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // CHANGED: Display appointment date properly formatted
                 Text(
-                  'Date: ${appt['date'] ?? 'N/A'}',
+                  'Appointment Date: ${_formatAppointmentDate(appt['date'] ?? appt['appointmentDate'])}',
                   style: const TextStyle(fontWeight: FontWeight.bold),
                 ),
                 Text('Time Slot: ${appt['timeSlot'] ?? 'N/A'}'),
+                if (appt['createdAt'] != null)
+                  Text(
+                    // CHANGED: Format booked on date to match other fields
+                    'Booked on: ${_formatAppointmentDate(appt['createdAt'])}',
+                    style: TextStyle(
+                      color: AppTheme.muted.withOpacity(0.8),
+                      fontSize: 12,
+                    ),
+                  ),
                 if (appt['notes'] != null && appt['notes'].isNotEmpty)
                   Text('Notes: ${appt['notes']}'),
                 const SizedBox(height: 12),
@@ -714,6 +755,60 @@ class _PatientDetailsDialogState extends State<PatientDetailsDialog>
       },
     );
   }
+
+  // NEW: Format appointment date properly
+  String _formatAppointmentDate(dynamic dateField) {
+    if (dateField == null) return 'N/A';
+
+    // If it's already a formatted date string, return it as is
+    if (dateField is String && dateField.contains('/')) {
+      return dateField;
+    }
+
+    // Handle Timestamp
+    if (dateField is Timestamp) {
+      final date = dateField.toDate();
+      return '${date.day}/${date.month}/${date.year}';
+    }
+
+    // Handle DateTime
+    if (dateField is DateTime) {
+      return '${dateField.day}/${dateField.month}/${dateField.year}';
+    }
+
+    // Handle string dates that might be in different formats
+    if (dateField is String) {
+      try {
+        final date = DateTime.parse(dateField);
+        return '${date.day}/${date.month}/${date.year}';
+      } catch (e) {
+        // If parsing fails, return the original string
+        return dateField;
+      }
+    }
+
+    return dateField.toString();
+  }
+
+  String _formatBookingDate(dynamic timestamp) {
+    if (timestamp == null) return 'N/A';
+
+    if (timestamp is Timestamp) {
+      final date = timestamp.toDate();
+      return '${date.day}/${date.month}/${date.year}';
+    }
+
+    if (timestamp is String) {
+      try {
+        final date = DateTime.parse(timestamp);
+        return '${date.day}/${date.month}/${date.year}';
+      } catch (e) {
+        return timestamp;
+      }
+    }
+
+    return timestamp.toString();
+  }
 }
 
 class PatientProfileTab extends StatelessWidget {
@@ -723,6 +818,18 @@ class PatientProfileTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Handle weight and height with proper formatting
+    final weight = patient['weight'];
+    final height = patient['height'];
+    final bloodGroup = patient['bloodGroup'] ?? 'Not set';
+    
+    String weightDisplay = (weight != null && weight.toString().isNotEmpty && weight != '') 
+        ? '$weight kg' 
+        : 'Not set';
+    String heightDisplay = (height != null && height.toString().isNotEmpty && height != '') 
+        ? '$height cm' 
+        : 'Not set';
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16.0),
       child: Container(
@@ -758,13 +865,15 @@ class PatientProfileTab extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 12),
-            _buildInfoRow('Name', patient['name'] ?? 'N/A'),
-            _buildInfoRow('Email', patient['email'] ?? 'N/A'),
-            _buildInfoRow('Phone', patient['phone'] ?? 'N/A'),
-            _buildInfoRow('Date of Birth', patient['dateOfBirth'] ?? 'N/A'),
-            _buildInfoRow('Gender', patient['gender'] ?? 'N/A'),
-            _buildInfoRow('Address', patient['address'] ?? 'N/A'),
-            _buildInfoRow('Disease', patient['disease'] ?? 'N/A'),
+            _buildInfoRow('Name', patient['name'] ?? 'Not set'),
+            _buildInfoRow('Email', patient['email'] ?? 'Not set'),
+            _buildInfoRow('Phone', patient['phone'] ?? 'Not set'),
+            _buildInfoRow('Date of Birth', patient['dateOfBirth'] ?? 'Not set'),
+            _buildInfoRow('Gender', patient['gender'] ?? 'Not set'),
+            _buildInfoRow('Blood Group', bloodGroup),
+            _buildInfoRow('Address', patient['address'] ?? 'Not set'),
+            _buildInfoRow('Weight', weightDisplay),
+            _buildInfoRow('Height', heightDisplay),
           ],
         ),
       ),
@@ -787,7 +896,9 @@ class PatientProfileTab extends StatelessWidget {
           Expanded(
             child: Text(
               value,
-              style: TextStyle(color: AppTheme.muted.withOpacity(0.95)),
+              style: TextStyle(
+                color: value == 'Not set' ? Colors.orange : AppTheme.muted.withOpacity(0.95),
+              ),
             ),
           ),
         ],
@@ -1031,8 +1142,6 @@ class PrescriptionsTab extends StatelessWidget {
                     ),
                     const SizedBox(height: 12),
                     _buildInfoRow('Doctor', data['doctorName'] ?? 'N/A'),
-                    _buildInfoRow('Quantity', data['quantity'] ?? 'N/A'),
-                    _buildInfoRow('Frequency', data['frequency'] ?? 'N/A'),
                     _buildInfoRow('Duration', data['duration'] ?? 'N/A'),
                     _buildInfoRow(
                       'Instructions',
@@ -1132,27 +1241,27 @@ class _AddRecordTabState extends State<AddRecordTab>
 
   // Predefined medicines with prices
   final List<Medicine> _medicines = [
-  Medicine(name: 'Paracetamol', pricePerUnit: 5.0), // ₹5 per unit
-  Medicine(name: 'Ibuprofen', pricePerUnit: 8.0),   // ₹8 per unit
-  Medicine(name: 'Amoxicillin', pricePerUnit: 15.0),
-  Medicine(name: 'Aspirin', pricePerUnit: 4.0),
-  Medicine(name: 'Metformin', pricePerUnit: 7.0),
-  Medicine(name: 'Atorvastatin', pricePerUnit: 18.0),
-  Medicine(name: 'Lisinopril', pricePerUnit: 12.0),
-  Medicine(name: 'Levothyroxine', pricePerUnit: 14.0),
-  Medicine(name: 'Amlodipine', pricePerUnit: 13.0),
-  Medicine(name: 'Omeprazole', pricePerUnit: 17.0),
-  Medicine(name: 'Simvastatin', pricePerUnit: 16.0),
-  Medicine(name: 'Metoprolol', pricePerUnit: 10.0),
-  Medicine(name: 'Losartan', pricePerUnit: 15.0),
-  Medicine(name: 'Albuterol', pricePerUnit: 22.0),
-  Medicine(name: 'Gabapentin', pricePerUnit: 20.0),
-  Medicine(name: 'Hydrochlorothiazide', pricePerUnit: 9.0),
-  Medicine(name: 'Sertraline', pricePerUnit: 16.0),
-  Medicine(name: 'Montelukast', pricePerUnit: 24.0),
-  Medicine(name: 'Pantoprazole', pricePerUnit: 19.0),
-  Medicine(name: 'Tramadol', pricePerUnit: 28.0),
-];
+    Medicine(name: 'Paracetamol', pricePerUnit: 5.0), // ₹5 per unit
+    Medicine(name: 'Ibuprofen', pricePerUnit: 8.0),   // ₹8 per unit
+    Medicine(name: 'Amoxicillin', pricePerUnit: 15.0),
+    Medicine(name: 'Aspirin', pricePerUnit: 4.0),
+    Medicine(name: 'Metformin', pricePerUnit: 7.0),
+    Medicine(name: 'Atorvastatin', pricePerUnit: 18.0),
+    Medicine(name: 'Lisinopril', pricePerUnit: 12.0),
+    Medicine(name: 'Levothyroxine', pricePerUnit: 14.0),
+    Medicine(name: 'Amlodipine', pricePerUnit: 13.0),
+    Medicine(name: 'Omeprazole', pricePerUnit: 17.0),
+    Medicine(name: 'Simvastatin', pricePerUnit: 16.0),
+    Medicine(name: 'Metoprolol', pricePerUnit: 10.0),
+    Medicine(name: 'Losartan', pricePerUnit: 15.0),
+    Medicine(name: 'Albuterol', pricePerUnit: 22.0),
+    Medicine(name: 'Gabapentin', pricePerUnit: 20.0),
+    Medicine(name: 'Hydrochlorothiazide', pricePerUnit: 9.0),
+    Medicine(name: 'Sertraline', pricePerUnit: 16.0),
+    Medicine(name: 'Montelukast', pricePerUnit: 24.0),
+    Medicine(name: 'Pantoprazole', pricePerUnit: 19.0),
+    Medicine(name: 'Tramadol', pricePerUnit: 28.0),
+  ];
 
   @override
   void initState() {
