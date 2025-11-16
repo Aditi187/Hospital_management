@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'login_page.dart';
 import 'signup_page.dart';
 import 'doctor_dashboard.dart';
@@ -9,6 +10,25 @@ import 'theme.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Load environment variables from a local .env file if present. This is
+  // optional — if the file doesn't exist or doesn't define OPENAI_API_KEY,
+  // dotenv.env['OPENAI_API_KEY'] will be null and the app will use the
+  // built-in rule-based chatbot.
+  try {
+    await dotenv.load(fileName: '.env');
+    print('DEBUG MAIN: .env loaded successfully');
+    print(
+      'DEBUG MAIN: GEMINI_API_KEY present: ${dotenv.env['GEMINI_API_KEY']?.isNotEmpty ?? false}',
+    );
+    if (dotenv.env['GEMINI_API_KEY']?.isNotEmpty ?? false) {
+      print(
+        'DEBUG MAIN: GEMINI_API_KEY value starts with: ${dotenv.env['GEMINI_API_KEY']!.substring(0, 10)}...',
+      );
+    }
+  } catch (e) {
+    print('DEBUG MAIN: Error loading .env: $e');
+  }
+
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   runApp(const MyApp());
 }

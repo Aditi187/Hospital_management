@@ -25,6 +25,8 @@ dependencies:
   intl: ^0.20.1
   google_fonts: ^6.2.1
   fluttertoast: ^8.2.4
+  flutter_dotenv: ^5.0.2
+  http: ^1.0.0
 
   # UI widgets
   table_calendar: ^3.1.2
@@ -39,3 +41,7 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  
+  # Include .env file for API keys
+  assets:
+    - .env

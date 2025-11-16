@@ -5,7 +5,11 @@ import 'package:hospital_management/theme.dart';
 import '../login_page.dart';
 import 'medical_reports_page.dart';
 import 'appointment_history_page.dart';
+import 'chatbot_widget.dart';
+import '../config.dart';
 import '../doctor_consultation_page.dart';
+import '../widgets/dashboard_card.dart';
+import '../widgets/draggable_fab.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({Key? key}) : super(key: key);
@@ -18,6 +22,7 @@ class _DashboardScreenState extends State<DashboardScreen>
     with TickerProviderStateMixin {
   late AnimationController _fadeController;
   final User? currentUser = FirebaseAuth.instance.currentUser;
+  bool _isChatOpen = false;
 
   @override
   void initState() {
@@ -61,52 +66,144 @@ class _DashboardScreenState extends State<DashboardScreen>
         ],
       ),
       drawer: _buildDrawer(context),
-      body: currentUser == null
-          ? const Center(child: CircularProgressIndicator())
-          : StreamBuilder<DocumentSnapshot>(
-              stream: FirebaseFirestore.instance
-                  .collection('users')
-                  .doc(currentUser!.uid)
-                  .snapshots(),
-              builder: (context, snapshot) {
-                if (snapshot.hasError) {
-                  return Center(child: Text('Error: ${snapshot.error}'));
-                }
+      body: Stack(
+        children: [
+          currentUser == null
+              ? const Center(child: CircularProgressIndicator())
+              : StreamBuilder<DocumentSnapshot>(
+                  stream: FirebaseFirestore.instance
+                      .collection('users')
+                      .doc(currentUser!.uid)
+                      .snapshots(),
+                  builder: (context, snapshot) {
+                    if (snapshot.hasError) {
+                      return Center(child: Text('Error: ${snapshot.error}'));
+                    }
 
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
 
-                Map<String, dynamic> userData =
-                    snapshot.data!.data() as Map<String, dynamic>? ?? {};
+                    Map<String, dynamic> userData =
+                        snapshot.data!.data() as Map<String, dynamic>? ?? {};
 
-                return FadeTransition(
-                  opacity: _fadeController,
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Welcome Section
-                        _buildWelcomeSection(userData),
-                        const SizedBox(height: 16),
+                    return FadeTransition(
+                      opacity: _fadeController,
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Welcome Section
+                            _buildWelcomeSection(userData),
+                            const SizedBox(height: 12),
+                            // Tip of the Day (creative, low-risk feature)
+                            _buildTipOfTheDay(userData),
+                            const SizedBox(height: 16),
 
-                        // Patient information (phone, DOB, gender, address, weight, height)
-                        _buildPatientInfoSection(userData),
-                        const SizedBox(height: 24),
+                            // Patient information (phone, DOB, gender, address, weight, height)
+                            _buildPatientInfoSection(userData),
+                            const SizedBox(height: 24),
 
-                        // Recent Prescriptions Section
-                        _buildRecentPrescriptionsSection(currentUser!.uid),
-                        const SizedBox(height: 24),
+                            // Exercise Tips removed by request
 
-                        // Healthcare Services (only key actions kept)
-                        _buildQuickActionsSection(),
-                      ],
+                            // Recent Prescriptions Section
+                            _buildRecentPrescriptionsSection(currentUser!.uid),
+                            const SizedBox(height: 24),
+
+                            // Healthcare Services (only key actions kept)
+                            _buildQuickActionsSection(),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+          // Floating chat overlay + draggable FAB
+          if (_isChatOpen)
+            Positioned(
+              right: 16,
+              bottom: 90,
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final width = MediaQuery.of(context).size.width;
+                  final panelWidth = width > 420 ? 380.0 : width - 32.0;
+                  final panelHeight = MediaQuery.of(context).size.height * 0.5;
+                  return Material(
+                    elevation: 12,
+                    borderRadius: BorderRadius.circular(12),
+                    child: Container(
+                      width: panelWidth,
+                      height: panelHeight,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Column(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 8,
+                            ),
+                            decoration: BoxDecoration(
+                              color: AppTheme.primary,
+                              borderRadius: const BorderRadius.vertical(
+                                top: Radius.circular(12),
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                const Expanded(
+                                  child: Text(
+                                    'Assistant',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                                IconButton(
+                                  icon: const Icon(
+                                    Icons.close,
+                                    color: Colors.white,
+                                  ),
+                                  onPressed: () =>
+                                      setState(() => _isChatOpen = false),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Expanded(
+                            child: ChatWidget(
+                              openAiApiKey: openAiApiKey,
+                              onRequestOpenAppointments: () {
+                                // close overlay and open appointments
+                                setState(() => _isChatOpen = false);
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) =>
+                                        const AppointmentHistoryPage(),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                );
-              },
+                  );
+                },
+              ),
             ),
+
+          DraggableFab(
+            child: const Icon(Icons.chat, color: Colors.white),
+            onPressed: () => setState(() => _isChatOpen = !_isChatOpen),
+          ),
+        ],
+      ),
     );
   }
 
@@ -270,111 +367,115 @@ class _DashboardScreenState extends State<DashboardScreen>
     );
   }
 
-Widget _buildPatientInfoSection(Map<String, dynamic> userData) {
-  final phone = userData['phone'] ?? 'Not set';
-  final dob = userData['dateOfBirth'] ?? 'Not set';
-  final gender = userData['gender'] ?? 'Not set';
-  final address = userData['address'] ?? 'Not set';
-  final bloodGroup = userData['bloodGroup'] ?? 'Not set';
-  
-  // Handle weight and height with proper formatting
-  final weight = userData['weight'];
-  final height = userData['height'];
-  
-  String weightDisplay = (weight != null && weight.toString().isNotEmpty && weight != '') 
-      ? '$weight kg' 
-      : 'Not set';
-  String heightDisplay = (height != null && height.toString().isNotEmpty && height != '') 
-      ? '$height cm' 
-      : 'Not set';
+  Widget _buildPatientInfoSection(Map<String, dynamic> userData) {
+    final phone = userData['phone'] ?? 'Not set';
+    final dob = userData['dateOfBirth'] ?? 'Not set';
+    final gender = userData['gender'] ?? 'Not set';
+    final address = userData['address'] ?? 'Not set';
+    final bloodGroup = userData['bloodGroup'] ?? 'Not set';
 
-  Widget infoRow(String label, String value, {IconData? icon}) {
-    return Row(
-      children: [
-        if (icon != null) Icon(icon, size: 18, color: AppTheme.muted),
-        if (icon != null) const SizedBox(width: 8),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                label,
-                style: const TextStyle(fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                value,
-                style: TextStyle(
-                  color: value == 'Not set' ? Colors.orange : Colors.grey[800],
+    // Handle weight and height with proper formatting
+    final weight = userData['weight'];
+    final height = userData['height'];
+
+    String weightDisplay =
+        (weight != null && weight.toString().isNotEmpty && weight != '')
+        ? '$weight kg'
+        : 'Not set';
+    String heightDisplay =
+        (height != null && height.toString().isNotEmpty && height != '')
+        ? '$height cm'
+        : 'Not set';
+
+    Widget infoRow(String label, String value, {IconData? icon}) {
+      return Row(
+        children: [
+          if (icon != null) Icon(icon, size: 18, color: AppTheme.muted),
+          if (icon != null) const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: const TextStyle(fontWeight: FontWeight.w600),
                 ),
+                const SizedBox(height: 4),
+                Text(
+                  value,
+                  style: TextStyle(
+                    color: value == 'Not set'
+                        ? Colors.orange
+                        : Colors.grey[800],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      );
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: AppTheme.surface,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: AppTheme.muted.withOpacity(0.12),
+            blurRadius: 10,
+            offset: const Offset(0, 6),
+          ),
+        ],
+        border: Border.all(color: AppTheme.muted.withOpacity(0.06)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: AppTheme.primaryLight,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(Icons.info_outline, color: AppTheme.primary),
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Text(
+                  'Patient Information',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+              ),
+              IconButton(
+                tooltip: 'Edit patient information',
+                onPressed: () => _editPatientInfo(userData),
+                icon: Icon(Icons.edit, color: AppTheme.primary),
               ),
             ],
           ),
-        ),
-      ],
+          const SizedBox(height: 12),
+          infoRow('Phone', phone.toString(), icon: Icons.phone),
+          const SizedBox(height: 8),
+          infoRow('Date of Birth', dob.toString(), icon: Icons.cake),
+          const SizedBox(height: 8),
+          infoRow('Gender', gender.toString(), icon: Icons.person),
+          const SizedBox(height: 8),
+          infoRow('Blood Group', bloodGroup.toString(), icon: Icons.bloodtype),
+          const SizedBox(height: 8),
+          infoRow('Address', address.toString(), icon: Icons.location_on),
+          const SizedBox(height: 8),
+          infoRow('Weight', weightDisplay, icon: Icons.monitor_weight),
+          const SizedBox(height: 8),
+          infoRow('Height', heightDisplay, icon: Icons.height),
+        ],
+      ),
     );
   }
-
-  return Container(
-    width: double.infinity,
-    padding: const EdgeInsets.all(18),
-    decoration: BoxDecoration(
-      color: AppTheme.surface,
-      borderRadius: BorderRadius.circular(16),
-      boxShadow: [
-        BoxShadow(
-          color: AppTheme.muted.withOpacity(0.12),
-          blurRadius: 10,
-          offset: const Offset(0, 6),
-        ),
-      ],
-      border: Border.all(color: AppTheme.muted.withOpacity(0.06)),
-    ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: AppTheme.primaryLight,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(Icons.info_outline, color: AppTheme.primary),
-            ),
-            const SizedBox(width: 12),
-            const Expanded(
-              child: Text(
-                'Patient Information',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-            ),
-            IconButton(
-              tooltip: 'Edit patient information',
-              onPressed: () => _editPatientInfo(userData),
-              icon: Icon(Icons.edit, color: AppTheme.primary),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        infoRow('Phone', phone.toString(), icon: Icons.phone),
-        const SizedBox(height: 8),
-        infoRow('Date of Birth', dob.toString(), icon: Icons.cake),
-        const SizedBox(height: 8),
-        infoRow('Gender', gender.toString(), icon: Icons.person),
-        const SizedBox(height: 8),
-        infoRow('Blood Group', bloodGroup.toString(), icon: Icons.bloodtype),
-        const SizedBox(height: 8),
-        infoRow('Address', address.toString(), icon: Icons.location_on),
-        const SizedBox(height: 8),
-        infoRow('Weight', weightDisplay, icon: Icons.monitor_weight),
-        const SizedBox(height: 8),
-        infoRow('Height', heightDisplay, icon: Icons.height),
-      ],
-    ),
-  );
-}
 
   Widget _buildRecentPrescriptionsSection(String userId) {
     return StreamBuilder<QuerySnapshot>(
@@ -666,6 +767,8 @@ Widget _buildPatientInfoSection(Map<String, dynamic> userData) {
                 AppTheme.primaryVariant,
                 _showHealthTips,
               ),
+              // Chatbot is accessible via the floating draggable FAB; removed
+              // from quick actions to avoid duplicate entry.
             ],
           ),
         ],
@@ -679,67 +782,7 @@ Widget _buildPatientInfoSection(Map<String, dynamic> userData) {
     Color color,
     VoidCallback onTap,
   ) {
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [Colors.white, color.withOpacity(0.05)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: color.withOpacity(0.2),
-            blurRadius: 12,
-            offset: const Offset(0, 6),
-            spreadRadius: 0,
-          ),
-        ],
-        border: Border.all(color: color.withOpacity(0.1), width: 1.5),
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(20),
-          child: Container(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [color, color.withOpacity(0.8)],
-                    ),
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: [
-                      BoxShadow(
-                        color: color.withOpacity(0.4),
-                        blurRadius: 8,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: Icon(icon, size: 28, color: Colors.white),
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  title,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.bold,
-                    color: color.withOpacity(0.9),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
+    return DashboardCard(title: title, icon: icon, color: color, onTap: onTap);
   }
 
   Widget _buildDrawer(BuildContext context) {
@@ -890,6 +933,17 @@ Widget _buildPatientInfoSection(Map<String, dynamic> userData) {
                       'Aim for 30 minutes of moderate exercise 5 days a week.',
                       Colors.orange,
                     ),
+                    // Insert exercise tips (general guidance) into Health Tips
+                    _buildHealthTip(
+                      Icons.fitness_center,
+                      'Exercise Tips',
+                      'Warm up 5–10 minutes before activity and cool down afterwards.\n'
+                          'Aim for at least 150 minutes/week of moderate aerobic activity (e.g., brisk walking) and include strength training 2×/week.\n'
+                          'Start slowly, progress duration before intensity, and split sessions into shorter bouts if needed.\n'
+                          'Stop and seek medical advice for chest pain, severe breathlessness, dizziness, or fainting.\n'
+                          'If you have a chronic condition (diabetes, hypertension, heart disease, COPD, arthritis, osteoporosis, back pain, asthma, depression, obesity), consult your clinician for personalised exercise recommendations.',
+                      Colors.indigo,
+                    ),
                     _buildHealthTip(
                       Icons.restaurant,
                       'Balanced Diet',
@@ -924,126 +978,126 @@ Widget _buildPatientInfoSection(Map<String, dynamic> userData) {
     );
   }
 
-void _editPatientInfo(Map<String, dynamic> userData) {
-  final phoneController = TextEditingController(
-    text: userData['phone'] ?? '',
-  );
-  final dobController = TextEditingController(
-    text: userData['dateOfBirth'] ?? '',
-  );
-  final addressController = TextEditingController(
-    text: userData['address'] ?? '',
-  );
-  final weightController = TextEditingController(
-    text: userData['weight']?.toString() ?? '',
-  );
-  final heightController = TextEditingController(
-    text: userData['height']?.toString() ?? '',
-  );
-  String selectedGender = userData['gender'] ?? 'Male';
+  void _editPatientInfo(Map<String, dynamic> userData) {
+    final phoneController = TextEditingController(
+      text: userData['phone'] ?? '',
+    );
+    final dobController = TextEditingController(
+      text: userData['dateOfBirth'] ?? '',
+    );
+    final addressController = TextEditingController(
+      text: userData['address'] ?? '',
+    );
+    final weightController = TextEditingController(
+      text: userData['weight']?.toString() ?? '',
+    );
+    final heightController = TextEditingController(
+      text: userData['height']?.toString() ?? '',
+    );
+    String selectedGender = userData['gender'] ?? 'Male';
 
-  showDialog(
-    context: context,
-    builder: (context) => AlertDialog(
-      title: const Text('Edit Patient Information'),
-      content: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: phoneController,
-              decoration: const InputDecoration(labelText: 'Phone'),
-              keyboardType: TextInputType.phone,
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: dobController,
-              decoration: const InputDecoration(
-                labelText: 'Date of Birth (DD/MM/YYYY)',
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Edit Patient Information'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: phoneController,
+                decoration: const InputDecoration(labelText: 'Phone'),
+                keyboardType: TextInputType.phone,
               ),
-            ),
-            const SizedBox(height: 12),
-            DropdownButtonFormField<String>(
-              value: selectedGender,
-              decoration: const InputDecoration(labelText: 'Gender'),
-              items: ['Male', 'Female', 'Other']
-                  .map((g) => DropdownMenuItem(value: g, child: Text(g)))
-                  .toList(),
-              onChanged: (v) => selectedGender = v ?? selectedGender,
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: weightController,
-              decoration: const InputDecoration(labelText: 'Weight (kg)'),
-              keyboardType: TextInputType.numberWithOptions(decimal: true),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: heightController,
-              decoration: const InputDecoration(labelText: 'Height (cm)'),
-              keyboardType: TextInputType.numberWithOptions(decimal: true),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: addressController,
-              decoration: const InputDecoration(labelText: 'Address'),
-              maxLines: 2,
-            ),
-          ],
+              const SizedBox(height: 12),
+              TextField(
+                controller: dobController,
+                decoration: const InputDecoration(
+                  labelText: 'Date of Birth (DD/MM/YYYY)',
+                ),
+              ),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<String>(
+                value: selectedGender,
+                decoration: const InputDecoration(labelText: 'Gender'),
+                items: ['Male', 'Female', 'Other']
+                    .map((g) => DropdownMenuItem(value: g, child: Text(g)))
+                    .toList(),
+                onChanged: (v) => selectedGender = v ?? selectedGender,
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: weightController,
+                decoration: const InputDecoration(labelText: 'Weight (kg)'),
+                keyboardType: TextInputType.numberWithOptions(decimal: true),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: heightController,
+                decoration: const InputDecoration(labelText: 'Height (cm)'),
+                keyboardType: TextInputType.numberWithOptions(decimal: true),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: addressController,
+                decoration: const InputDecoration(labelText: 'Address'),
+                maxLines: 2,
+              ),
+            ],
+          ),
         ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final user = FirebaseAuth.instance.currentUser;
+              if (user == null) return;
+
+              // Parse weight and height properly
+              String weightValue = weightController.text.trim();
+              String heightValue = heightController.text.trim();
+
+              final updates = {
+                'phone': phoneController.text.trim(),
+                'dateOfBirth': dobController.text.trim(),
+                'gender': selectedGender,
+                'weight': weightValue.isNotEmpty ? weightValue : null,
+                'height': heightValue.isNotEmpty ? heightValue : null,
+                'address': addressController.text.trim(),
+                'updatedAt': FieldValue.serverTimestamp(),
+              };
+
+              try {
+                await FirebaseFirestore.instance
+                    .collection('users')
+                    .doc(user.uid)
+                    .set(updates, SetOptions(merge: true));
+
+                if (context.mounted) {
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Patient information updated successfully'),
+                    ),
+                  );
+                }
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Failed to update: $e')),
+                  );
+                }
+              }
+            },
+            child: const Text('Save'),
+          ),
+        ],
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Cancel'),
-        ),
-        ElevatedButton(
-          onPressed: () async {
-            final user = FirebaseAuth.instance.currentUser;
-            if (user == null) return;
-
-            // Parse weight and height properly
-            String weightValue = weightController.text.trim();
-            String heightValue = heightController.text.trim();
-
-            final updates = {
-              'phone': phoneController.text.trim(),
-              'dateOfBirth': dobController.text.trim(),
-              'gender': selectedGender,
-              'weight': weightValue.isNotEmpty ? weightValue : null,
-              'height': heightValue.isNotEmpty ? heightValue : null,
-              'address': addressController.text.trim(),
-              'updatedAt': FieldValue.serverTimestamp(),
-            };
-
-            try {
-              await FirebaseFirestore.instance
-                  .collection('users')
-                  .doc(user.uid)
-                  .set(updates, SetOptions(merge: true));
-              
-              if (context.mounted) {
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Patient information updated successfully'),
-                  ),
-                );
-              }
-            } catch (e) {
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Failed to update: $e')),
-                );
-              }
-            }
-          },
-          child: const Text('Save'),
-        ),
-      ],
-    ),
-  );
-}
+    );
+  }
 
   Widget _buildHealthTip(
     IconData icon,
@@ -1084,6 +1138,110 @@ void _editPatientInfo(Map<String, dynamic> userData) {
                 Text(description, style: const TextStyle(fontSize: 12)),
               ],
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTipOfTheDay(Map<String, dynamic> userData) {
+    final tips = [
+      {
+        'title': '2-minute Breathing Break',
+        'desc':
+            'Try 2 minutes of box breathing: inhale 4s, hold 4s, exhale 4s, hold 4s. Repeat 4 times to reduce stress.',
+      },
+      {
+        'title': 'Desk Stretch',
+        'desc':
+            'Stand up and do a gentle neck and shoulder roll. Stretch arms overhead for 30 seconds to ease tension.',
+      },
+      {
+        'title': 'Hydration Nudge',
+        'desc':
+            'Have a glass of water now — small hydration boosts focus and digestion.',
+      },
+      {
+        'title': 'Posture Check',
+        'desc':
+            'Sit tall with feet flat, shoulders relaxed. Set a 25-minute timer and re-check your posture afterwards.',
+      },
+      {
+        'title': 'Mini Walk',
+        'desc':
+            'Take a 5-minute walk around your room or building to increase circulation and clear your mind.',
+      },
+    ];
+
+    // Pick a deterministic index so the tip is stable during a session
+    final name = (userData['name'] ?? '') as String;
+    final idx =
+        (name.isNotEmpty
+            ? name.codeUnits.reduce((a, b) => a + b)
+            : DateTime.now().day) %
+        tips.length;
+    final tip = tips[idx];
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: [
+          BoxShadow(
+            color: AppTheme.muted.withOpacity(0.06),
+            blurRadius: 12,
+            offset: const Offset(0, 6),
+          ),
+        ],
+        border: Border.all(color: AppTheme.muted.withOpacity(0.04)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: AppTheme.primary.withOpacity(0.08),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(Icons.lightbulb, color: AppTheme.primary, size: 28),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  tip['title']!,
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  tip['desc']!,
+                  style: TextStyle(color: Colors.grey.shade700, fontSize: 13),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          TextButton(
+            onPressed: () => showDialog(
+              context: context,
+              builder: (context) => AlertDialog(
+                title: Text(tip['title']!),
+                content: Text(tip['desc']!),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Close'),
+                  ),
+                ],
+              ),
+            ),
+            child: const Text('Learn more'),
           ),
         ],
       ),
