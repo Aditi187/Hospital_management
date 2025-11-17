@@ -1,0 +1,111 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper function to check if user is admin
+    function isAdmin() {
+      return request.auth != null 
+             && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+    
+    // Helper function to check if user is doctor
+    function isDoctor() {
+      return request.auth != null 
+             && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'doctor';
+    }
+    
+    // Users collection - users can read/write their own document, admins can read/write all
+    match /users/{userId} {
+      allow read: if request.auth != null || isAdmin();
+      allow write: if (request.auth != null && request.auth.uid == userId) || isAdmin();
+      
+      // Notifications subcollection
+      match /notifications/{notificationId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+    }
+    
+    // Doctors collection - doctors can write their own, anyone authenticated can read, admins can write all
+    match /doctors/{doctorId} {
+      allow read: if request.auth != null;
+      allow write: if (request.auth != null && request.auth.uid == doctorId) || isAdmin();
+    }
+    
+    // Appointments - patients and doctors can read/write their own, admins can read all
+    match /appointments/{appointmentId} {
+      allow read: if request.auth != null 
+                  && (resource.data.patientId == request.auth.uid 
+                      || resource.data.doctorId == request.auth.uid
+                      || isAdmin());
+      allow create: if request.auth != null 
+                    && request.resource.data.patientId == request.auth.uid;
+      allow update: if request.auth != null 
+                    && (resource.data.patientId == request.auth.uid 
+                        || resource.data.doctorId == request.auth.uid
+                        || isAdmin());
+      allow delete: if isAdmin();
+    }
+    
+    // Prescriptions - patients can write their own, doctors can read, admins can read all
+    match /prescriptions/{prescriptionId} {
+      allow read: if request.auth != null 
+                  && (resource.data.patientId == request.auth.uid 
+                      || isDoctor()
+                      || isAdmin());
+      allow create: if request.auth != null 
+                    && request.resource.data.patientId == request.auth.uid;
+      allow delete: if isAdmin();
+    }
+    
+    // Notifications collection - users can read their own, admins can write all
+    match /notifications/{notificationId} {
+      allow read: if request.auth != null && resource.data.userId == request.auth.uid;
+      allow write: if isAdmin();
+    }
+    
+    // Announcements collection - anyone can read, admins can write
+    match /announcements/{announcementId} {
+      allow read: if request.auth != null;
+      allow write: if isAdmin();
+    }
+    
+    // Counters - admins can read/write, signup process needs write access
+    match /counters/{counterId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null; // Needed for signup
+    }
+    
+    // PersonalId index - read for auth, write during signup
+    match /personalIdIndex/{personalId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null;
+    }
+    
+    // Chats - participants can read/write
+    match /chats/{chatId} {
+      allow read, write: if request.auth != null 
+                         && request.auth.uid in resource.data.participants;
+      
+      match /messages/{messageId} {
+        allow read, write: if request.auth != null 
+                           && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants;
+      }
+    }
+    
+    // Debug collections (REMOVE THESE IN PRODUCTION or restrict to admins)
+    match /debug_uploads/{userId} {
+      allow read, write: if request.auth != null || isAdmin();
+    }
+    
+    match /debug_auth_resets/{docId} {
+      allow read, write: if request.auth != null || isAdmin();
+    }
+    
+    // Audit logs - read only for authenticated users, admins can write
+    match /audit_logs/{logId} {
+      allow read: if request.auth != null;
+      allow write: if isAdmin();
+    }
+  }
+}
+

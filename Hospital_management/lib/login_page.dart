@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'doctor_dashboard.dart';
 import 'patient/patient_dashboard.dart';
+import 'admin/admin_dashboard.dart';
 import 'signup_page.dart';
 import 'theme.dart';
 
@@ -68,8 +69,54 @@ class _LoginPageState extends State<LoginPage> {
       Map<String, dynamic> userDoc = doc.data() as Map<String, dynamic>;
       String role = userDoc['role'];
 
+      // 🔹 Check if user is blocked
+      if (userDoc['isBlocked'] == true) {
+        await FirebaseAuth.instance.signOut();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Your account has been blocked. Reason: ${userDoc['blockReason'] ?? 'No reason provided'}',
+              ),
+              backgroundColor: Colors.red,
+              duration: const Duration(seconds: 5),
+            ),
+          );
+        }
+        return;
+      }
+
+      // 🔹 Check doctor approval status
+      if (role == 'doctor') {
+        final approvalStatus = userDoc['approvalStatus'] ?? 'pending';
+        if (approvalStatus != 'approved') {
+          await FirebaseAuth.instance.signOut();
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  approvalStatus == 'rejected'
+                      ? 'Your doctor account has been rejected. Reason: ${userDoc['rejectionReason'] ?? 'No reason provided'}'
+                      : 'Your doctor account is pending approval. Please wait for admin approval.',
+                ),
+                backgroundColor: approvalStatus == 'rejected'
+                    ? Colors.red
+                    : Colors.orange,
+                duration: const Duration(seconds: 5),
+              ),
+            );
+          }
+          return;
+        }
+      }
+
       // 🔹 Redirect based on role
-      if (role == "doctor") {
+      if (role == "admin") {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const AdminDashboard()),
+        );
+      } else if (role == "doctor") {
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (context) => const DoctorDashboard()),
@@ -90,6 +137,174 @@ class _LoginPageState extends State<LoginPage> {
       ).showSnackBar(SnackBar(content: Text("An error occurred: $e")));
     } finally {
       setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _sendPasswordReset() async {
+    String identifier = identifierController.text.trim();
+
+    if (identifier.isEmpty) {
+      // ask user for email or personal id
+      final TextEditingController askController = TextEditingController();
+      final res = await showDialog<String?>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Reset password'),
+          content: TextField(
+            controller: askController,
+            decoration: const InputDecoration(
+              labelText: 'Email or Personal ID',
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(null),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () =>
+                  Navigator.of(context).pop(askController.text.trim()),
+              child: const Text('Send'),
+            ),
+          ],
+        ),
+      );
+
+      if (res == null || res.isEmpty) return;
+      identifier = res;
+    }
+
+    String emailToUse = identifier;
+
+    try {
+      // If they supplied a personal ID, resolve to email via users collection
+      if (!identifier.contains('@')) {
+        // try users collection first
+        QuerySnapshot query = await FirebaseFirestore.instance
+            .collection('users')
+            .where('personalId', isEqualTo: identifier)
+            .limit(1)
+            .get();
+
+        if (query.docs.isEmpty) {
+          // fallback: doctors collection (some accounts are stored there)
+          QuerySnapshot docQuery = await FirebaseFirestore.instance
+              .collection('doctors')
+              .where('personalId', isEqualTo: identifier)
+              .limit(1)
+              .get();
+          if (docQuery.docs.isEmpty) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('No account found for that ID')),
+            );
+            return;
+          }
+          Map<String, dynamic> docData =
+              docQuery.docs.first.data() as Map<String, dynamic>;
+          emailToUse = (docData['email'] ?? '').toString();
+        } else {
+          Map<String, dynamic> userData =
+              query.docs.first.data() as Map<String, dynamic>;
+          emailToUse = (userData['email'] ?? '').toString();
+        }
+      } else {
+        // If user typed an email, confirm it exists in our users or doctors collection to avoid silent failures
+        QuerySnapshot query = await FirebaseFirestore.instance
+            .collection('users')
+            .where('email', isEqualTo: identifier)
+            .limit(1)
+            .get();
+        if (query.docs.isEmpty) {
+          QuerySnapshot docQuery = await FirebaseFirestore.instance
+              .collection('doctors')
+              .where('email', isEqualTo: identifier)
+              .limit(1)
+              .get();
+          if (docQuery.docs.isEmpty) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('No account found for that email')),
+            );
+            return;
+          }
+        }
+      }
+
+      if (emailToUse.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No email available for that account')),
+        );
+        return;
+      }
+
+      debugPrint('Sending password reset to: $emailToUse');
+
+      await FirebaseAuth.instance.sendPasswordResetEmail(email: emailToUse);
+
+      // write a small debug doc to help diagnose delivery issues
+      try {
+        final docId = emailToUse.replaceAll('@', '_at_').replaceAll('.', '_');
+        await FirebaseFirestore.instance
+            .collection('debug_auth_resets')
+            .doc(docId)
+            .set({
+              'email': emailToUse,
+              'sentAt': FieldValue.serverTimestamp(),
+              'status': 'sent',
+            }, SetOptions(merge: true));
+      } catch (e) {
+        debugPrint('Failed to write debug_auth_resets doc: $e');
+      }
+
+      // show masked email so user knows where to look (privacy-preserving)
+      final parts = emailToUse.split('@');
+      final local = parts[0];
+      final domain = parts.length > 1 ? parts[1] : '';
+      final maskedLocal = local.length <= 2
+          ? '${local[0]}*'
+          : '${local.substring(0, 2)}${'*' * (local.length - 2)}';
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Password reset email sent to $maskedLocal@$domain'),
+        ),
+      );
+    } on FirebaseAuthException catch (e) {
+      debugPrint('sendPasswordResetEmail error: ${e.code} ${e.message}');
+      try {
+        final docId = (identifier.contains('@') ? identifier : identifier)
+            .replaceAll('@', '_at_')
+            .replaceAll('.', '_');
+        await FirebaseFirestore.instance
+            .collection('debug_auth_resets')
+            .doc(docId)
+            .set({
+              'emailAttempt': emailToUse,
+              'error': e.message,
+              'code': e.code,
+              'attemptAt': FieldValue.serverTimestamp(),
+            }, SetOptions(merge: true));
+      } catch (_) {}
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error: ${e.message}')));
+    } catch (e) {
+      debugPrint('sendPasswordResetEmail unexpected error: $e');
+      try {
+        final docId = (identifier.contains('@') ? identifier : identifier)
+            .replaceAll('@', '_at_')
+            .replaceAll('.', '_');
+        await FirebaseFirestore.instance
+            .collection('debug_auth_resets')
+            .doc(docId)
+            .set({
+              'emailAttempt': emailToUse,
+              'error': e.toString(),
+              'attemptAt': FieldValue.serverTimestamp(),
+            }, SetOptions(merge: true));
+      } catch (_) {}
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error: $e')));
     }
   }
 
@@ -310,6 +525,43 @@ class _LoginPageState extends State<LoginPage> {
                               ),
                             ),
                           ),
+                        ),
+
+                        const SizedBox(height: 8),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            // Admin Access - subtle and professional
+                            TextButton(
+                              onPressed: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) =>
+                                        const SignupPage(isAdminMode: true),
+                                  ),
+                                );
+                              },
+                              child: Text(
+                                'Admin Access',
+                                style: TextStyle(
+                                  color: Colors.grey.shade500,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                            TextButton(
+                              onPressed: _sendPasswordReset,
+                              child: Text(
+                                'Forgot password?',
+                                style: TextStyle(
+                                  color: AppTheme.primary,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
 
                         const SizedBox(height: 36),

@@ -76,6 +76,10 @@ class _ChatWidgetState extends State<ChatWidget> {
     } catch (e) {
       // If Gemini fails, continue to fallback
       print('DEBUG: Gemini proxy error: $e');
+      // Check if it's an overload error
+      if (e.toString().contains('overloaded') || e.toString().contains('503')) {
+        return 'The AI service is currently experiencing high demand. Please try again in a moment. In the meantime, you can describe your symptoms and I\'ll try to help with basic health information.';
+      }
     }
 
     // Try OpenAI as fallback
@@ -89,13 +93,13 @@ class _ChatWidgetState extends State<ChatWidget> {
         if (resp != null && resp.isNotEmpty) return resp;
       } catch (e) {
         // If OpenAI fails, return error message
-        return 'Sorry, I encountered an error connecting to the AI service. Error: ${e.toString()}';
+        return 'Sorry, I encountered an error connecting to the AI service. The server might be busy. Please try again in a few moments.';
       }
     }
 
     // If everything fails, inform user succinctly
     print('DEBUG: No AI backends responded');
-    return 'Sorry, I couldn\'t reach the AI service right now. Please ensure the server is running (localhost:3000) and try again.';
+    return 'Sorry, the AI service is temporarily unavailable. This might be due to high demand. Please try again in a few moments, or contact support if the issue persists.';
   }
 
   Future<String?> _callGemini(String input, {required String apiKey}) async {
@@ -114,6 +118,12 @@ class _ChatWidgetState extends State<ChatWidget> {
       if (resp.statusCode == 200) {
         final Map<String, dynamic> data = jsonDecode(resp.body);
         return data['response'] as String?;
+      } else if (resp.statusCode == 503 || resp.statusCode == 429) {
+        // Service unavailable or rate limited
+        print(
+          'DEBUG: Gemini service temporarily unavailable (${resp.statusCode})',
+        );
+        throw Exception('overloaded');
       } else {
         print(
           'DEBUG: Gemini proxy returned status ${resp.statusCode}: ${resp.body}',

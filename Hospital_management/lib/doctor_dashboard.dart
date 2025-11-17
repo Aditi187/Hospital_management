@@ -2,6 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'theme.dart';
+import 'dart:async';
+import 'package:image_picker/image_picker.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'dart:typed_data';
+import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
+import 'widgets/user_chat_widget.dart';
+import 'package:hospital_management/widgets/diagnostics_page.dart';
+import 'package:hospital_management/widgets/production_verification_page.dart';
+import 'package:hospital_management/widgets/doctor_availability_calendar.dart';
 
 class DoctorDashboard extends StatefulWidget {
   const DoctorDashboard({super.key});
@@ -17,6 +27,9 @@ class _DoctorDashboardState extends State<DoctorDashboard>
   Map<String, dynamic> doctorData = {};
   List<Map<String, dynamic>> patients = [];
   bool isLoading = true;
+  StreamSubscription? _notifSub;
+  late ImagePicker _imagePicker;
+  Uint8List? _localDoctorProfileImageBytes;
 
   @override
   void initState() {
@@ -26,6 +39,134 @@ class _DoctorDashboardState extends State<DoctorDashboard>
     if (currentDoctorId.isNotEmpty) {
       _loadDoctorProfileAndPatients();
     }
+    // listen for incoming notifications for this doctor
+    if (currentDoctorId.isNotEmpty) {
+      _notifSub = FirebaseFirestore.instance
+          .collection('users')
+          .doc(currentDoctorId)
+          .collection('notifications')
+          .orderBy('createdAt', descending: true)
+          .limit(50)
+          .snapshots()
+          .listen((snap) async {
+            if (!mounted) return;
+            for (final change in snap.docChanges) {
+              if (change.type == DocumentChangeType.added) {
+                final doc = change.doc;
+                final data = doc.data() ?? {};
+
+                // Only show notification if it's unread
+                final isRead = data['read'] == true || data['isRead'] == true;
+                if (isRead) continue;
+
+                final type = data['type'] as String?;
+                final body =
+                    (data['body'] ?? data['message'] ?? 'New notification')
+                        .toString();
+                final title = (data['title'] ?? '').toString();
+                final chatId = data['chatId'] as String?;
+
+                // Show different colors for different notification types
+                Color? backgroundColor;
+                IconData? icon;
+                if (type == 'alert') {
+                  backgroundColor = Colors.orange.shade600;
+                  icon = Icons.warning_amber;
+                } else if (type == 'message') {
+                  backgroundColor = Colors.purple.shade600;
+                  icon = Icons.message;
+                }
+
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Row(
+                      children: [
+                        if (icon != null) ...[
+                          Icon(icon, color: Colors.white),
+                          const SizedBox(width: 8),
+                        ],
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (title.isNotEmpty)
+                                Text(
+                                  title,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              Text(
+                                body,
+                                style: const TextStyle(color: Colors.white),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    backgroundColor: backgroundColor,
+                    action: SnackBarAction(
+                      label: type == 'message' ? 'Open' : 'OK',
+                      textColor: Colors.white,
+                      onPressed: () async {
+                        try {
+                          await doc.reference.update({'read': true});
+                        } catch (_) {}
+                        if (chatId != null && type == 'message') {
+                          await _openChatByChatId(chatId);
+                        }
+                      },
+                    ),
+                    duration: const Duration(seconds: 8),
+                  ),
+                );
+              }
+            }
+          });
+    }
+    // image picker for profile photo
+    _imagePicker = ImagePicker();
+  }
+
+  Future<void> _showPhotoOptions(String uid) async {
+    if (!mounted) return;
+    showModalBottomSheet(
+      context: context,
+      builder: (context) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (!kIsWeb)
+                ListTile(
+                  leading: const Icon(Icons.camera_alt),
+                  title: const Text('Take Photo'),
+                  onTap: () async {
+                    Navigator.of(context).pop();
+                    await _pickAndUploadProfilePhoto(uid, fromCamera: true);
+                  },
+                ),
+              ListTile(
+                leading: const Icon(Icons.photo_library),
+                title: Text(kIsWeb ? 'Choose file' : 'Choose from gallery'),
+                onTap: () async {
+                  Navigator.of(context).pop();
+                  await _pickAndUploadProfilePhoto(uid, fromCamera: false);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.close),
+                title: const Text('Cancel'),
+                onTap: () => Navigator.of(context).pop(),
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   Future<void> _loadDoctorProfileAndPatients() async {
@@ -45,6 +186,15 @@ class _DoctorDashboardState extends State<DoctorDashboard>
             .doc(currentDoctorId)
             .get();
         doctorData = userSnap.exists ? (userSnap.data() ?? {}) : {};
+      }
+
+      // If we have an in-memory local preview but a persisted photoUrl exists
+      // in the doctor's profile, clear the local preview so the NetworkImage
+      // (with cache-buster) will be used instead.
+      if (_localDoctorProfileImageBytes != null &&
+          doctorData['photoUrl'] != null &&
+          (doctorData['photoUrl'] as String).isNotEmpty) {
+        _localDoctorProfileImageBytes = null;
       }
 
       // Load patients who have appointments with this doctor
@@ -79,6 +229,117 @@ class _DoctorDashboardState extends State<DoctorDashboard>
     });
   }
 
+  Future<void> _pickAndUploadProfilePhoto(
+    String uid, {
+    bool fromCamera = false,
+  }) async {
+    try {
+      debugPrint('Starting doctor pick/upload for uid: $uid');
+      Uint8List? bytes;
+
+      if (kIsWeb) {
+        final result = await FilePicker.platform.pickFiles(
+          type: FileType.image,
+          withData: true,
+        );
+        if (result == null || result.files.isEmpty) return;
+        bytes = result.files.first.bytes;
+      } else {
+        final XFile? file = await _imagePicker.pickImage(
+          source: fromCamera ? ImageSource.camera : ImageSource.gallery,
+          maxWidth: 1024,
+          maxHeight: 1024,
+          imageQuality: 80,
+        );
+        if (file == null) return;
+        bytes = await file.readAsBytes();
+      }
+      if (bytes == null || bytes.isEmpty) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('No image selected')));
+        }
+        return;
+      }
+
+      // debug: bytes length to help diagnose web vs mobile picker
+      debugPrint('Picked image bytes: ${bytes.length}');
+
+      final ref = FirebaseStorage.instance
+          .ref()
+          .child('profile_photos')
+          .child(uid)
+          .child('${DateTime.now().millisecondsSinceEpoch}.jpg');
+
+      final uploadTask = ref.putData(
+        bytes,
+        SettableMetadata(contentType: 'image/jpeg'),
+      );
+      final snapshot = await uploadTask.whenComplete(() {});
+      final url = await snapshot.ref.getDownloadURL();
+      final ts = DateTime.now().millisecondsSinceEpoch;
+      final urlWithTs = url.contains('?') ? '$url&ts=$ts' : '$url?ts=$ts';
+
+      // Update both doctors and users collection for consistency
+      await FirebaseFirestore.instance.collection('doctors').doc(uid).set({
+        'photoUrl': urlWithTs,
+      }, SetOptions(merge: true));
+      await FirebaseFirestore.instance.collection('users').doc(uid).set({
+        'photoUrl': urlWithTs,
+      }, SetOptions(merge: true));
+
+      // show immediate in-memory preview to avoid NetworkImage cache issues
+      setState(() {
+        _localDoctorProfileImageBytes = bytes;
+      });
+
+      // write a small debug doc so we can inspect server-side evidence of the upload
+      try {
+        await FirebaseFirestore.instance
+            .collection('debug_uploads')
+            .doc(uid)
+            .set({
+              'lastUploadAt': FieldValue.serverTimestamp(),
+              'lastUploadUrl': urlWithTs,
+              'lastUploadBytes': bytes.length,
+              'savedPhotoUrl': urlWithTs,
+            }, SetOptions(merge: true));
+      } catch (e) {
+        debugPrint('Failed to write debug_uploads doc (doctor): $e');
+      }
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Profile photo updated — ${urlWithTs.split('?').first}',
+            ),
+          ),
+        );
+      }
+    } catch (e, s) {
+      debugPrint('Profile upload error (doctor): $e');
+      debugPrint('$s');
+      try {
+        await FirebaseFirestore.instance
+            .collection('debug_uploads')
+            .doc(uid)
+            .set({
+              'lastUploadAt': FieldValue.serverTimestamp(),
+              'lastUploadError': e.toString(),
+            }, SetOptions(merge: true));
+      } catch (writeErr) {
+        debugPrint('Failed to write debug_uploads error (doctor): $writeErr');
+      }
+      if (context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Failed to upload photo: $e')));
+      }
+    }
+  }
+
   void _showPatientDetailsDialog(Map<String, dynamic> patient) {
     showDialog(
       context: context,
@@ -86,9 +347,57 @@ class _DoctorDashboardState extends State<DoctorDashboard>
         return PatientDetailsDialog(
           patientId: patient['id'],
           patientData: patient['data'],
+          doctorId: currentDoctorId,
           doctorName: doctorData['name'] ?? doctorData['email'] ?? 'Doctor',
         );
       },
+    );
+  }
+
+  @override
+  void dispose() {
+    _notifSub?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _openChatByChatId(String chatId) async {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) return;
+    final chatDoc = await FirebaseFirestore.instance
+        .collection('chats')
+        .doc(chatId)
+        .get();
+    if (!chatDoc.exists) return;
+    final data = chatDoc.data() ?? {};
+    final participants = (data['participants'] as List?)?.cast<String>() ?? [];
+    final other = participants.firstWhere(
+      (p) => p != currentUser.uid,
+      orElse: () => '',
+    );
+    if (other.isEmpty) return;
+    final userSnap = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(other)
+        .get();
+    final name =
+        (userSnap.exists ? (userSnap.data()?['name'] as String?) : null) ??
+        'User';
+
+    // open chat dialog directly
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        insetPadding: const EdgeInsets.all(16),
+        child: SizedBox(
+          width: double.maxFinite,
+          height: MediaQuery.of(context).size.height * 0.7,
+          child: UserChatWidget(
+            currentUserId: currentUser.uid,
+            otherUserId: other,
+            otherUserName: name,
+          ),
+        ),
+      ),
     );
   }
 
@@ -235,109 +544,191 @@ class _DoctorDashboardState extends State<DoctorDashboard>
   }
 
   Widget _buildWelcomeSection() {
-  return Container(
-    width: double.infinity,
-    padding: const EdgeInsets.all(28),
-    decoration: BoxDecoration(
-      gradient: LinearGradient(
-        colors: [AppTheme.primary, AppTheme.primaryVariant],
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(28),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [AppTheme.primary, AppTheme.primaryVariant],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: AppTheme.primary.withOpacity(0.28),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+            spreadRadius: 3,
+          ),
+        ],
       ),
-      borderRadius: BorderRadius.circular(24),
-      boxShadow: [
-        BoxShadow(
-          color: AppTheme.primary.withOpacity(0.28),
-          blurRadius: 20,
-          offset: const Offset(0, 10),
-          spreadRadius: 3,
-        ),
-      ],
-    ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Welcome,',
-          style: TextStyle(
-            color: AppTheme.onPrimary.withOpacity(0.95),
-            fontSize: 24,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          doctorData['name'] ?? 'Doctor',
-          style: const TextStyle(
-            color: AppTheme.onPrimary,
-            fontSize: 32,
-            fontWeight: FontWeight.bold,
-            letterSpacing: 0.5,
-          ),
-        ),
-        const SizedBox(height: 8),
-        // Combined Doctor ID and Email Display Box
-        Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: AppTheme.surface.withOpacity(0.15),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: AppTheme.surface.withOpacity(0.3),
-              width: 1.5,
-            ),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
             children: [
-              // Doctor ID Row
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons.badge,
-                    size: 16,
-                    color: AppTheme.onPrimary.withOpacity(0.9),
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    'Doctor ID: ${doctorData['personalId'] ?? doctorData['doctorId'] ?? doctorData['id'] ?? 'N/A'}',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w600,
-                      color: AppTheme.onPrimary.withOpacity(0.95),
-                      fontSize: 14,
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(28),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.06),
+                      blurRadius: 8,
+                      offset: const Offset(0, 4),
                     ),
-                  ),
-                ],
+                  ],
+                ),
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    CircleAvatar(
+                      radius: 36,
+                      backgroundColor: AppTheme.surface.withOpacity(0.05),
+                      backgroundImage: _localDoctorProfileImageBytes != null
+                          ? MemoryImage(_localDoctorProfileImageBytes!)
+                                as ImageProvider
+                          : (doctorData['photoUrl'] != null &&
+                                    (doctorData['photoUrl'] as String)
+                                        .isNotEmpty
+                                ? NetworkImage(doctorData['photoUrl'] as String)
+                                : null),
+                      // only show the placeholder icon when there is no background image
+                      child:
+                          (_localDoctorProfileImageBytes == null &&
+                              (doctorData['photoUrl'] == null ||
+                                  (doctorData['photoUrl'] as String).isEmpty))
+                          ? Icon(
+                              Icons.person,
+                              size: 36,
+                              color: AppTheme.onPrimary,
+                            )
+                          : null,
+                    ),
+                    Positioned(
+                      bottom: -4,
+                      right: -4,
+                      child: GestureDetector(
+                        onTap: () async {
+                          if (currentDoctorId.isNotEmpty) {
+                            await _showPhotoOptions(currentDoctorId);
+                            await _loadDoctorProfileAndPatients();
+                          }
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.08),
+                                blurRadius: 6,
+                              ),
+                            ],
+                          ),
+                          child: Icon(
+                            Icons.edit,
+                            size: 14,
+                            color: AppTheme.primary,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
-              const SizedBox(height: 6),
-              // Email Row
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons.email,
-                    size: 16,
-                    color: AppTheme.onPrimary.withOpacity(0.9),
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    doctorData['email'] ?? 'No email',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w500,
-                      color: AppTheme.onPrimary.withOpacity(0.9),
-                      fontSize: 14,
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Welcome,',
+                      style: TextStyle(
+                        color: AppTheme.onPrimary.withOpacity(0.95),
+                        fontSize: 24,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 8),
+                    Text(
+                      doctorData['name'] ?? 'Doctor',
+                      style: const TextStyle(
+                        color: AppTheme.onPrimary,
+                        fontSize: 32,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
-        ),
-      ],
-    ),
-  );
-}
+          // Combined Doctor ID and Email Display Box
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppTheme.surface.withOpacity(0.15),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: AppTheme.surface.withOpacity(0.3),
+                width: 1.5,
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Doctor ID Row
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.badge,
+                      size: 16,
+                      color: AppTheme.onPrimary.withOpacity(0.9),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Doctor ID: ${doctorData['personalId'] ?? doctorData['doctorId'] ?? doctorData['id'] ?? 'N/A'}',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: AppTheme.onPrimary.withOpacity(0.95),
+                        fontSize: 14,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                // Email Row
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.email,
+                      size: 16,
+                      color: AppTheme.onPrimary.withOpacity(0.9),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      doctorData['email'] ?? 'No email',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w500,
+                        color: AppTheme.onPrimary.withOpacity(0.9),
+                        fontSize: 14,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   Widget _buildDrawer(BuildContext context) {
     return Drawer(
@@ -390,6 +781,51 @@ class _DoctorDashboardState extends State<DoctorDashboard>
             hoverColor: AppTheme.primaryLight,
           ),
           ListTile(
+            leading: Icon(Icons.calendar_month, color: AppTheme.primary),
+            title: const Text('View Availability Calendar'),
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => DoctorAvailabilityCalendar(
+                    doctorId: currentDoctorId,
+                    doctorName: doctorData['name'] ?? 'Doctor',
+                  ),
+                ),
+              );
+            },
+            hoverColor: AppTheme.primaryLight,
+          ),
+          ListTile(
+            leading: Icon(Icons.bug_report, color: AppTheme.primary),
+            title: const Text('Diagnostics (dev)'),
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const DiagnosticsPage(),
+                ),
+              );
+            },
+            hoverColor: AppTheme.primaryLight,
+          ),
+          ListTile(
+            leading: Icon(Icons.verified, color: AppTheme.primary),
+            title: const Text('Production Status'),
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const ProductionVerificationPage(),
+                ),
+              );
+            },
+            hoverColor: AppTheme.primaryLight,
+          ),
+          ListTile(
             leading: Icon(Icons.logout, color: AppTheme.primary),
             title: const Text('Logout'),
             onTap: () async {
@@ -411,12 +847,14 @@ class _DoctorDashboardState extends State<DoctorDashboard>
 class PatientDetailsDialog extends StatefulWidget {
   final String patientId;
   final Map<String, dynamic> patientData;
+  final String doctorId;
   final String doctorName;
 
   const PatientDetailsDialog({
     super.key,
     required this.patientId,
     required this.patientData,
+    required this.doctorId,
     required this.doctorName,
   });
 
@@ -433,7 +871,7 @@ class _PatientDetailsDialogState extends State<PatientDetailsDialog>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 5, vsync: this);
+    _tabController = TabController(length: 6, vsync: this);
     _loadAppointments();
   }
 
@@ -466,7 +904,8 @@ class _PatientDetailsDialogState extends State<PatientDetailsDialog>
           'isRejected': data['isRejected'] ?? false,
           'notes': data['notes'] ?? '',
           'createdAt': data['createdAt'],
-          'appointmentDate': data['appointmentDate'], // Added for appointment booking date
+          'appointmentDate':
+              data['appointmentDate'], // Added for appointment booking date
         };
       }).toList();
     } catch (e) {
@@ -610,7 +1049,8 @@ class _PatientDetailsDialogState extends State<PatientDetailsDialog>
                               .doc(patientId)
                               .get(),
                           builder: (context, snapshot) {
-                            if (snapshot.connectionState == ConnectionState.waiting) {
+                            if (snapshot.connectionState ==
+                                ConnectionState.waiting) {
                               return Text(
                                 'Patient ID: Loading...',
                                 style: TextStyle(
@@ -628,8 +1068,10 @@ class _PatientDetailsDialogState extends State<PatientDetailsDialog>
                                 ),
                               );
                             }
-                            final userData = snapshot.data!.data() as Map<String, dynamic>?;
-                            final personalId = userData?['personalId'] ?? patientId;
+                            final userData =
+                                snapshot.data!.data() as Map<String, dynamic>?;
+                            final personalId =
+                                userData?['personalId'] ?? patientId;
                             return Text(
                               'Patient ID: $personalId',
                               style: TextStyle(
@@ -663,6 +1105,7 @@ class _PatientDetailsDialogState extends State<PatientDetailsDialog>
                 Tab(icon: Icon(Icons.medication), text: 'Prescriptions'),
                 Tab(icon: Icon(Icons.add_circle), text: 'Add Record'),
                 Tab(icon: Icon(Icons.event_note), text: 'Appointments'),
+                Tab(icon: Icon(Icons.chat), text: 'Chat'),
               ],
             ),
             Expanded(
@@ -677,6 +1120,12 @@ class _PatientDetailsDialogState extends State<PatientDetailsDialog>
                     doctorName: widget.doctorName,
                   ),
                   _buildAppointmentsTab(),
+                  // Private chat between doctor (current user) and this patient
+                  UserChatWidget(
+                    currentUserId: widget.doctorId,
+                    otherUserId: patientId,
+                    otherUserName: patient['name'] ?? 'Patient',
+                  ),
                 ],
               ),
             ),
@@ -790,6 +1239,7 @@ class _PatientDetailsDialogState extends State<PatientDetailsDialog>
     return dateField.toString();
   }
 
+  // ignore: unused_element
   String _formatBookingDate(dynamic timestamp) {
     if (timestamp == null) return 'N/A';
 
@@ -822,12 +1272,14 @@ class PatientProfileTab extends StatelessWidget {
     final weight = patient['weight'];
     final height = patient['height'];
     final bloodGroup = patient['bloodGroup'] ?? 'Not set';
-    
-    String weightDisplay = (weight != null && weight.toString().isNotEmpty && weight != '') 
-        ? '$weight kg' 
+
+    String weightDisplay =
+        (weight != null && weight.toString().isNotEmpty && weight != '')
+        ? '$weight kg'
         : 'Not set';
-    String heightDisplay = (height != null && height.toString().isNotEmpty && height != '') 
-        ? '$height cm' 
+    String heightDisplay =
+        (height != null && height.toString().isNotEmpty && height != '')
+        ? '$height cm'
         : 'Not set';
 
     return SingleChildScrollView(
@@ -897,7 +1349,9 @@ class PatientProfileTab extends StatelessWidget {
             child: Text(
               value,
               style: TextStyle(
-                color: value == 'Not set' ? Colors.orange : AppTheme.muted.withOpacity(0.95),
+                color: value == 'Not set'
+                    ? Colors.orange
+                    : AppTheme.muted.withOpacity(0.95),
               ),
             ),
           ),
@@ -1242,7 +1696,7 @@ class _AddRecordTabState extends State<AddRecordTab>
   // Predefined medicines with prices
   final List<Medicine> _medicines = [
     Medicine(name: 'Paracetamol', pricePerUnit: 5.0), // ₹5 per unit
-    Medicine(name: 'Ibuprofen', pricePerUnit: 8.0),   // ₹8 per unit
+    Medicine(name: 'Ibuprofen', pricePerUnit: 8.0), // ₹8 per unit
     Medicine(name: 'Amoxicillin', pricePerUnit: 15.0),
     Medicine(name: 'Aspirin', pricePerUnit: 4.0),
     Medicine(name: 'Metformin', pricePerUnit: 7.0),
@@ -1326,7 +1780,8 @@ class _AddRecordTabState extends State<AddRecordTab>
       if (item.medicine != null && item.quantity.isNotEmpty) {
         double quantityValue = double.tryParse(item.quantity) ?? 0;
         // Cost calculation: medicine price × quantity × duration
-        double medicineCost = quantityValue * item.medicine!.pricePerUnit * durationDays;
+        double medicineCost =
+            quantityValue * item.medicine!.pricePerUnit * durationDays;
         total += medicineCost;
         item.cost = medicineCost;
       }
@@ -1345,7 +1800,8 @@ class _AddRecordTabState extends State<AddRecordTab>
 
     return _medicines.where((medicine) {
       // Don't show medicine if it's already selected in another item
-      final isSelectedElsewhere = selectedMedicines.contains(medicine) && 
+      final isSelectedElsewhere =
+          selectedMedicines.contains(medicine) &&
           _medicineItems[currentIndex].medicine != medicine;
       return !isSelectedElsewhere;
     }).toList();
@@ -1383,7 +1839,9 @@ class _AddRecordTabState extends State<AddRecordTab>
   Future<void> _savePrescription() async {
     try {
       // Validate that at least one medicine is selected
-      final selectedMedicines = _medicineItems.where((item) => item.medicine != null).toList();
+      final selectedMedicines = _medicineItems
+          .where((item) => item.medicine != null)
+          .toList();
       if (selectedMedicines.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Please add at least one medicine')),
@@ -1392,9 +1850,9 @@ class _AddRecordTabState extends State<AddRecordTab>
       }
 
       if (_durationController.text.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Please enter duration')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Please enter duration')));
         return;
       }
 
@@ -1403,12 +1861,16 @@ class _AddRecordTabState extends State<AddRecordTab>
         'patientId': widget.patientId,
         'doctorId': FirebaseAuth.instance.currentUser?.uid,
         'doctorName': widget.doctorName,
-        'medicines': selectedMedicines.map((item) => {
-          'name': item.medicine!.name,
-          'quantity': item.quantity,
-          'frequency': item.frequency,
-          'cost': item.cost,
-        }).toList(),
+        'medicines': selectedMedicines
+            .map(
+              (item) => {
+                'name': item.medicine!.name,
+                'quantity': item.quantity,
+                'frequency': item.frequency,
+                'cost': item.cost,
+              },
+            )
+            .toList(),
         'instructions': _instructionsController.text.trim(),
         'duration': _durationController.text.trim(),
         'totalCost': _totalCost,
@@ -1416,7 +1878,9 @@ class _AddRecordTabState extends State<AddRecordTab>
         'prescribedDate': FieldValue.serverTimestamp(),
       };
 
-      await FirebaseFirestore.instance.collection('prescriptions').add(prescriptionData);
+      await FirebaseFirestore.instance
+          .collection('prescriptions')
+          .add(prescriptionData);
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Prescription added successfully')),
@@ -1431,9 +1895,9 @@ class _AddRecordTabState extends State<AddRecordTab>
         _totalCost = 0.0;
       });
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error adding prescription: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error adding prescription: $e')));
     }
   }
 
@@ -1534,7 +1998,7 @@ class _AddRecordTabState extends State<AddRecordTab>
                       ),
                     ),
                     const SizedBox(height: 16),
-                    
+
                     // Medicine Items
                     ListView.builder(
                       shrinkWrap: true,
@@ -1544,7 +2008,7 @@ class _AddRecordTabState extends State<AddRecordTab>
                         return _buildMedicineItem(index);
                       },
                     ),
-                    
+
                     // Add Medicine Button
                     Padding(
                       padding: const EdgeInsets.symmetric(vertical: 16.0),
@@ -1567,9 +2031,9 @@ class _AddRecordTabState extends State<AddRecordTab>
                         ),
                       ),
                     ),
-                    
+
                     const SizedBox(height: 16),
-                    
+
                     // Duration and Instructions
                     TextFormField(
                       controller: _durationController,
@@ -1591,7 +2055,7 @@ class _AddRecordTabState extends State<AddRecordTab>
                       ),
                       maxLines: 3,
                     ),
-                    
+
                     // Total Cost Display
                     const SizedBox(height: 24),
                     Container(
@@ -1623,7 +2087,7 @@ class _AddRecordTabState extends State<AddRecordTab>
                         ],
                       ),
                     ),
-                    
+
                     const SizedBox(height: 24),
                     ElevatedButton(
                       onPressed: _savePrescription,
@@ -1674,7 +2138,7 @@ class _AddRecordTabState extends State<AddRecordTab>
               ],
             ),
             const SizedBox(height: 12),
-            
+
             // Medicine Dropdown
             DropdownButtonFormField<Medicine>(
               value: item.medicine,
@@ -1685,14 +2149,16 @@ class _AddRecordTabState extends State<AddRecordTab>
               items: availableMedicines.map((medicine) {
                 return DropdownMenuItem<Medicine>(
                   value: medicine,
-                  child: Text('${medicine.name} (₹${medicine.pricePerUnit.toStringAsFixed(2)}/unit)'),
+                  child: Text(
+                    '${medicine.name} (₹${medicine.pricePerUnit.toStringAsFixed(2)}/unit)',
+                  ),
                 );
               }).toList(),
               onChanged: (medicine) => _updateMedicine(index, medicine),
             ),
-            
+
             const SizedBox(height: 12),
-            
+
             // Quantity and Frequency in a row
             Row(
               children: [
@@ -1715,17 +2181,29 @@ class _AddRecordTabState extends State<AddRecordTab>
                       border: OutlineInputBorder(),
                     ),
                     items: const [
-                      DropdownMenuItem(value: 'Once daily', child: Text('Once daily')),
-                      DropdownMenuItem(value: 'Twice daily', child: Text('Twice daily')),
-                      DropdownMenuItem(value: 'Three times daily', child: Text('Three times daily')),
-                      DropdownMenuItem(value: 'Four times daily', child: Text('Four times daily')),
+                      DropdownMenuItem(
+                        value: 'Once daily',
+                        child: Text('Once daily'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'Twice daily',
+                        child: Text('Twice daily'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'Three times daily',
+                        child: Text('Three times daily'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'Four times daily',
+                        child: Text('Four times daily'),
+                      ),
                     ],
                     onChanged: (value) => _updateFrequency(index, value ?? ''),
                   ),
                 ),
               ],
             ),
-            
+
             // Cost for this medicine
             if (item.cost > 0)
               Padding(

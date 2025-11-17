@@ -1,5 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'dart:typed_data' show Uint8List;
 
 class FirestoreService {
   static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -472,6 +474,67 @@ class FirestoreService {
     } catch (e) {
       print('Error adding prescription: $e');
       return false;
+    }
+  }
+
+  // Upload a prescription file for a patient (audit-enabled)
+  // Returns the download URL on success, or null on failure.
+  static Future<String?> uploadPatientPrescription({
+    required String patientId,
+    required Uint8List bytes,
+    required String fileName,
+    String? contentType,
+  }) async {
+    try {
+      if (_userId.isEmpty) throw Exception('Not authenticated');
+
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final safeName = fileName.replaceAll(' ', '_');
+      final storagePath =
+          'patient_prescriptions/$patientId/${timestamp}_$safeName';
+
+      final ref = FirebaseStorage.instance.ref().child(storagePath);
+      final meta = SettableMetadata(
+        contentType:
+            contentType ??
+            (fileName.toLowerCase().endsWith('.pdf')
+                ? 'application/pdf'
+                : 'image/jpeg'),
+      );
+
+      final uploadTask = await ref.putData(bytes, meta);
+      final downloadUrl = await uploadTask.ref.getDownloadURL();
+
+      final docData = {
+        'patientId': patientId,
+        'uploadedBy': _userId,
+        'fileUrl': downloadUrl,
+        'fileName': fileName,
+        'status': 'UploadedByPatient',
+        'uploadedAt': FieldValue.serverTimestamp(),
+        'createdAt': DateTime.now().toIso8601String(),
+      };
+
+      final docRef = await _firestore.collection('prescriptions').add(docData);
+
+      // Audit log entry
+      await _createAuditLog('prescription_uploaded_by_patient', {
+        'prescriptionDocId': docRef.id,
+        'patientId': patientId,
+        'fileName': fileName,
+        'storagePath': storagePath,
+      });
+
+      return downloadUrl;
+    } catch (e, st) {
+      print('Error uploading patient prescription: $e\n$st');
+      try {
+        await _firestore.collection('debug_uploads').doc(patientId).set({
+          'lastUploadAt': FieldValue.serverTimestamp(),
+          'lastUploadError': e.toString(),
+        }, SetOptions(merge: true));
+      } catch (_) {}
+      return null;
     }
   }
 

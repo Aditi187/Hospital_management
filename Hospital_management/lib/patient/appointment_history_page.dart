@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:hospital_management/theme.dart';
+import '../widgets/user_chat_widget.dart';
+import 'dart:async';
 
 class AppointmentHistoryPage extends StatefulWidget {
   const AppointmentHistoryPage({Key? key}) : super(key: key);
@@ -11,6 +13,8 @@ class AppointmentHistoryPage extends StatefulWidget {
 }
 
 class _AppointmentHistoryPageState extends State<AppointmentHistoryPage> {
+  StreamSubscription? _notifSub;
+
   Future<void> _clearMyAppointments(BuildContext context, String uid) async {
     try {
       final appointments = await FirebaseFirestore.instance
@@ -147,6 +151,124 @@ class _AppointmentHistoryPageState extends State<AppointmentHistoryPage> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    // set up listener for incoming message notifications (unread)
+    final User? currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser != null) {
+      _notifSub = FirebaseFirestore.instance
+          .collection('users')
+          .doc(currentUser.uid)
+          .collection('notifications')
+          .where('type', isEqualTo: 'message')
+          .where('read', isEqualTo: false)
+          .snapshots()
+          .listen((snap) async {
+            if (!mounted) return;
+            for (final change in snap.docChanges) {
+              if (change.type == DocumentChangeType.added) {
+                final doc = change.doc;
+                final data = doc.data() as Map<String, dynamic>? ?? {};
+                final body = data['body'] ?? 'New message';
+                final chatId = data['chatId'] as String?;
+
+                // show a SnackBar with an Open action
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(body),
+                    action: SnackBarAction(
+                      label: 'Open',
+                      onPressed: () async {
+                        // mark as read and open chat
+                        try {
+                          await doc.reference.update({'read': true});
+                        } catch (_) {}
+                        if (chatId != null) {
+                          await _openChatByChatId(chatId);
+                        }
+                      },
+                    ),
+                    duration: const Duration(seconds: 6),
+                  ),
+                );
+              }
+            }
+          });
+    }
+  }
+
+  @override
+  void dispose() {
+    _notifSub?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _openChat(
+    BuildContext context, {
+    required String doctorId,
+    required String doctorName,
+  }) async {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) return;
+
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        insetPadding: const EdgeInsets.all(16),
+        child: SizedBox(
+          width: double.maxFinite,
+          height: MediaQuery.of(context).size.height * 0.7,
+          child: UserChatWidget(
+            currentUserId: currentUser.uid,
+            otherUserId: doctorId,
+            otherUserName: doctorName,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openChatByChatId(String chatId) async {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) return;
+    final chatDoc = await FirebaseFirestore.instance
+        .collection('chats')
+        .doc(chatId)
+        .get();
+    if (!chatDoc.exists) return;
+    final data = chatDoc.data() as Map<String, dynamic>? ?? {};
+    final participants = (data['participants'] as List?)?.cast<String>() ?? [];
+    final other = participants.firstWhere(
+      (p) => p != currentUser.uid,
+      orElse: () => '',
+    );
+    if (other.isEmpty) return;
+    final userSnap = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(other)
+        .get();
+    final name =
+        (userSnap.exists ? (userSnap.data()?['name'] as String?) : null) ??
+        'User';
+    // open chat dialog
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        insetPadding: const EdgeInsets.all(16),
+        child: SizedBox(
+          width: double.maxFinite,
+          height: MediaQuery.of(context).size.height * 0.7,
+          child: UserChatWidget(
+            currentUserId: currentUser.uid,
+            otherUserId: other,
+            otherUserName: name,
+          ),
+        ),
       ),
     );
   }
@@ -360,6 +482,26 @@ class _AppointmentHistoryPageState extends State<AppointmentHistoryPage> {
                 status.toLowerCase() == 'completed') ...[
               const SizedBox(height: 16),
               _buildMedicineReportSection(context, appointmentId, data),
+              const SizedBox(height: 12),
+              // Chat button to message the doctor for confirmed/completed appointments
+              if ((data['doctorId'] ?? '').toString().isNotEmpty) ...[
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: ElevatedButton.icon(
+                    onPressed: () => _openChat(
+                      context,
+                      doctorId: (data['doctorId'] ?? '').toString(),
+                      doctorName: (data['doctorName'] ?? 'Doctor').toString(),
+                    ),
+                    icon: const Icon(Icons.chat),
+                    label: const Text('Chat with Doctor'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppTheme.primary,
+                      foregroundColor: AppTheme.onPrimary,
+                    ),
+                  ),
+                ),
+              ],
             ],
           ],
         ),

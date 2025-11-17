@@ -4,7 +4,9 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'dart:async';
 import 'specialties.dart';
 import 'package:hospital_management/theme.dart';
-
+import 'widgets/doctor_availability_calendar.dart';
+import 'widgets/doctor_availability_card.dart';
+import 'package:intl/intl.dart';
 
 class DoctorConsultationPage extends StatefulWidget {
   const DoctorConsultationPage({Key? key}) : super(key: key);
@@ -30,13 +32,42 @@ class _DoctorConsultationPageState extends State<DoctorConsultationPage> {
   List<String> specialties = ['All', ...canonicalSpecialties];
   final timeSlots = [
     '09:00 AM',
-    '10:00 AM',
-    '11:00 AM',
-    '02:00 PM',
-    '04:00 PM',
+    '09:15 AM',
+    '09:30 AM',
+    '09:45 AM',
+    '10:05 AM',
+    '10:20 AM',
+    '10:35 AM',
+    '10:50 AM',
+    '11:15 AM',
+    '11:30 AM',
+    '11:45 AM',
+    '12:00 PM',
+    '12:15 PM',
+    '12:30 PM',
+    '12:45 PM',
     '05:00 PM',
+    '05:15 PM',
+    '05:30 PM',
+    '05:45 PM',
+    '06:30 PM',
+    '06:45 PM',
+    '07:00 PM',
+    '07:30 PM',
+    '07:45 PM',
+    '08:00 PM',
+    '08:30 PM',
+    '08:45 PM',
+    '09:00 PM',
+    '09:15 PM',
+    '09:30 PM',
+    '09:45 PM',
     '10:00 PM',
+    '10:15 PM',
+    '10:30 PM',
+    '10:45 PM',
     '11:00 PM',
+
   ];
 
   @override
@@ -210,6 +241,41 @@ class _DoctorConsultationPageState extends State<DoctorConsultationPage> {
     });
   }
 
+  Future<void> _openAvailabilityCalendar() async {
+    if (selectedDoctorId == null || selectedDoctorName == null) return;
+
+    final result = await Navigator.push<Map<String, dynamic>>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => DoctorAvailabilityCalendar(
+          doctorId: selectedDoctorId!,
+          doctorName: selectedDoctorName!,
+          onSlotSelected: (date, timeSlot) {
+            // Close the calendar and return the selected slot
+            Navigator.pop(context, {'date': date, 'timeSlot': timeSlot});
+          },
+        ),
+      ),
+    );
+
+    // If user selected a slot, update the form
+    if (result != null && mounted) {
+      setState(() {
+        selectedDate = result['date'] as DateTime;
+        selectedTimeSlot = result['timeSlot'] as String;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Selected: ${DateFormat('MMM dd, yyyy').format(selectedDate)} at $selectedTimeSlot',
+          ),
+          backgroundColor: Colors.green,
+        ),
+      );
+    }
+  }
+
   Future<void> _pickDate() async {
     final d = await showDatePicker(
       context: context,
@@ -235,32 +301,50 @@ class _DoctorConsultationPageState extends State<DoctorConsultationPage> {
                 color: Colors.blue[50],
                 child: Padding(
                   padding: const EdgeInsets.all(12.0),
-                  child: Row(
+                  child: Column(
                     children: [
-                      const Icon(Icons.medical_services, color: Colors.blue),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Dr. $selectedDoctorName',
-                              style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                              ),
+                      Row(
+                        children: [
+                          const Icon(
+                            Icons.medical_services,
+                            color: Colors.blue,
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Dr. $selectedDoctorName',
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                Text(
+                                  selectedDoctorSpecialty ?? '',
+                                  style: TextStyle(color: Colors.grey[700]),
+                                ),
+                              ],
                             ),
-                            Text(
-                              selectedDoctorSpecialty ?? '',
-                              style: TextStyle(color: Colors.grey[700]),
-                            ),
-                          ],
-                        ),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.clear, color: Colors.red),
+                            onPressed: _clearDoctorSelection,
+                            tooltip: 'Change doctor',
+                          ),
+                        ],
                       ),
-                      IconButton(
-                        icon: const Icon(Icons.clear, color: Colors.red),
-                        onPressed: _clearDoctorSelection,
-                        tooltip: 'Change doctor',
+                      const SizedBox(height: 8),
+                      ElevatedButton.icon(
+                        onPressed: _openAvailabilityCalendar,
+                        icon: const Icon(Icons.calendar_month),
+                        label: const Text('View Availability Calendar'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.green,
+                          foregroundColor: Colors.white,
+                          minimumSize: const Size(double.infinity, 45),
+                        ),
                       ),
                     ],
                   ),
@@ -324,7 +408,7 @@ class _DoctorConsultationPageState extends State<DoctorConsultationPage> {
                     final list = filtered.isNotEmpty ? filtered : docs;
                     return ListView.separated(
                       itemCount: list.length,
-                      separatorBuilder: (_, __) => const Divider(),
+                      separatorBuilder: (_, __) => const SizedBox(height: 8),
                       itemBuilder: (c, i) {
                         final doc = list[i];
                         final m = doc.data() as Map<String, dynamic>;
@@ -337,32 +421,16 @@ class _DoctorConsultationPageState extends State<DoctorConsultationPage> {
                         final specialty = m['specialty']?.toString() ?? '';
                         final isSelected = selectedDoctorId == doc.id;
 
-                        return Card(
-                          color: isSelected ? Colors.blue[50] : null,
-                          elevation: isSelected ? 2 : 1,
-                          child: ListTile(
-                            leading: const Icon(Icons.medical_services),
-                            title: Text(
-                              display,
-                              style: TextStyle(
-                                fontWeight: isSelected
-                                    ? FontWeight.bold
-                                    : FontWeight.normal,
-                              ),
-                            ),
-                            subtitle: Text(specialty),
-                            trailing: isSelected
-                                ? const Icon(
-                                    Icons.check_circle,
-                                    color: Colors.green,
-                                  )
-                                : null,
-                            onTap: () => setState(() {
-                              selectedDoctorId = doc.id;
-                              selectedDoctorName = display;
-                              selectedDoctorSpecialty = specialty;
-                            }),
-                          ),
+                        return DoctorAvailabilityCard(
+                          doctorId: doc.id,
+                          doctorName: display,
+                          specialty: specialty,
+                          isSelected: isSelected,
+                          onTap: () => setState(() {
+                            selectedDoctorId = doc.id;
+                            selectedDoctorName = display;
+                            selectedDoctorSpecialty = specialty;
+                          }),
                         );
                       },
                     );

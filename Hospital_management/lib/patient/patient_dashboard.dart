@@ -2,11 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:hospital_management/theme.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
+import 'package:firebase_storage/firebase_storage.dart';
+import 'dart:typed_data';
+import 'dart:async';
 import '../login_page.dart';
 import 'medical_reports_page.dart';
 import 'appointment_history_page.dart';
 import 'chatbot_widget.dart';
 import '../config.dart';
+import '../widgets/user_chat_widget.dart';
 import '../doctor_consultation_page.dart';
 import '../widgets/dashboard_card.dart';
 import '../widgets/draggable_fab.dart';
@@ -23,6 +30,9 @@ class _DashboardScreenState extends State<DashboardScreen>
   late AnimationController _fadeController;
   final User? currentUser = FirebaseAuth.instance.currentUser;
   bool _isChatOpen = false;
+  StreamSubscription? _notifSub;
+  late ImagePicker _imagePicker;
+  Uint8List? _localProfileImageBytes;
 
   @override
   void initState() {
@@ -32,12 +42,291 @@ class _DashboardScreenState extends State<DashboardScreen>
       vsync: this,
     );
     _fadeController.forward();
+    // listen for incoming notifications for this patient
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      _notifSub = FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .collection('notifications')
+          .orderBy('createdAt', descending: true)
+          .limit(50)
+          .snapshots()
+          .listen((snap) async {
+            if (!mounted) return;
+            for (final change in snap.docChanges) {
+              if (change.type == DocumentChangeType.added) {
+                final doc = change.doc;
+                final data = doc.data() ?? {};
+
+                // Only show notification if it's unread
+                final isRead = data['read'] == true || data['isRead'] == true;
+                if (isRead) continue;
+
+                final type = data['type'] as String?;
+                final body =
+                    (data['body'] ?? data['message'] ?? 'New notification')
+                        .toString();
+                final title = (data['title'] ?? '').toString();
+                final chatId = data['chatId'] as String?;
+
+                // Show different colors for different notification types
+                Color? backgroundColor;
+                IconData? icon;
+                if (type == 'announcement') {
+                  backgroundColor = Colors.blue.shade600;
+                  icon = Icons.campaign;
+                } else if (type == 'message') {
+                  backgroundColor = Colors.purple.shade600;
+                  icon = Icons.message;
+                }
+
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Row(
+                      children: [
+                        if (icon != null) ...[
+                          Icon(icon, color: Colors.white),
+                          const SizedBox(width: 8),
+                        ],
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (title.isNotEmpty)
+                                Text(
+                                  title,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              Text(
+                                body,
+                                style: const TextStyle(color: Colors.white),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    backgroundColor: backgroundColor,
+                    action: SnackBarAction(
+                      label: type == 'message' ? 'Open' : 'OK',
+                      textColor: Colors.white,
+                      onPressed: () async {
+                        try {
+                          await doc.reference.update({'read': true});
+                        } catch (_) {}
+                        if (chatId != null && type == 'message') {
+                          await _openChatByChatId(chatId);
+                        }
+                      },
+                    ),
+                    duration: const Duration(seconds: 8),
+                  ),
+                );
+              }
+            }
+          });
+    }
+    // image picker instance
+    _imagePicker = ImagePicker();
+  }
+
+  Future<void> _showPhotoOptions(String uid) async {
+    if (!mounted) return;
+    showModalBottomSheet(
+      context: context,
+      builder: (context) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (!kIsWeb)
+                ListTile(
+                  leading: const Icon(Icons.camera_alt),
+                  title: const Text('Take Photo'),
+                  onTap: () async {
+                    Navigator.of(context).pop();
+                    await _pickAndUploadProfilePhoto(uid, fromCamera: true);
+                  },
+                ),
+              ListTile(
+                leading: const Icon(Icons.photo_library),
+                title: Text(kIsWeb ? 'Choose file' : 'Choose from gallery'),
+                onTap: () async {
+                  Navigator.of(context).pop();
+                  await _pickAndUploadProfilePhoto(uid, fromCamera: false);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.close),
+                title: const Text('Cancel'),
+                onTap: () => Navigator.of(context).pop(),
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   @override
   void dispose() {
     _fadeController.dispose();
+    _notifSub?.cancel();
     super.dispose();
+  }
+
+  Future<void> _pickAndUploadProfilePhoto(
+    String uid, {
+    bool fromCamera = false,
+  }) async {
+    try {
+      debugPrint('Starting pick/upload for uid: $uid');
+      Uint8List? bytes;
+
+      if (kIsWeb) {
+        final result = await FilePicker.platform.pickFiles(
+          type: FileType.image,
+          withData: true,
+        );
+        if (result == null || result.files.isEmpty) return;
+        bytes = result.files.first.bytes;
+      } else {
+        final XFile? file = await _imagePicker.pickImage(
+          source: fromCamera ? ImageSource.camera : ImageSource.gallery,
+          maxWidth: 1024,
+          maxHeight: 1024,
+          imageQuality: 80,
+        );
+        if (file == null) return;
+        bytes = await file.readAsBytes();
+      }
+      if (bytes == null || bytes.isEmpty) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('No image selected')));
+        }
+        return;
+      }
+
+      // debug: bytes length to help diagnose web vs mobile picker
+      debugPrint('Picked image bytes: ${bytes.length}');
+
+      final ref = FirebaseStorage.instance
+          .ref()
+          .child('profile_photos')
+          .child(uid)
+          .child('${DateTime.now().millisecondsSinceEpoch}.jpg');
+
+      final uploadTask = ref.putData(
+        bytes,
+        SettableMetadata(contentType: 'image/jpeg'),
+      );
+      final snapshot = await uploadTask.whenComplete(() {});
+      final url = await snapshot.ref.getDownloadURL();
+      final ts = DateTime.now().millisecondsSinceEpoch;
+      final urlWithTs = url.contains('?') ? '$url&ts=$ts' : '$url?ts=$ts';
+
+      // update (or create) the user's profile photo URL in Firestore (merge to avoid missing-doc errors)
+      await FirebaseFirestore.instance.collection('users').doc(uid).set({
+        'photoUrl': urlWithTs,
+      }, SetOptions(merge: true));
+
+      // keep a local in-memory preview so the UI updates immediately and avoids caching issues
+      setState(() {
+        _localProfileImageBytes = bytes;
+      });
+
+      // write a small debug doc so we can inspect server-side evidence of the upload
+      try {
+        await FirebaseFirestore.instance
+            .collection('debug_uploads')
+            .doc(uid)
+            .set({
+              'lastUploadAt': FieldValue.serverTimestamp(),
+              'lastUploadUrl': urlWithTs,
+              'lastUploadBytes': bytes.length,
+              'savedPhotoUrl': urlWithTs,
+            }, SetOptions(merge: true));
+      } catch (e) {
+        debugPrint('Failed to write debug_uploads doc: $e');
+      }
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Profile photo updated — ${urlWithTs.split('?').first}',
+            ),
+          ),
+        );
+      }
+    } catch (e, s) {
+      debugPrint('Profile upload error: $e');
+      debugPrint('$s');
+      // write debug error to Firestore for server-side inspection
+      try {
+        await FirebaseFirestore.instance
+            .collection('debug_uploads')
+            .doc(uid)
+            .set({
+              'lastUploadAt': FieldValue.serverTimestamp(),
+              'lastUploadError': e.toString(),
+            }, SetOptions(merge: true));
+      } catch (writeErr) {
+        debugPrint('Failed to write debug_uploads error: $writeErr');
+      }
+      if (context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Failed to upload photo: $e')));
+      }
+    }
+  }
+
+  Future<void> _openChatByChatId(String chatId) async {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) return;
+    final chatDoc = await FirebaseFirestore.instance
+        .collection('chats')
+        .doc(chatId)
+        .get();
+    if (!chatDoc.exists) return;
+    final data = chatDoc.data() ?? {};
+    final participants = (data['participants'] as List?)?.cast<String>() ?? [];
+    final other = participants.firstWhere(
+      (p) => p != currentUser.uid,
+      orElse: () => '',
+    );
+    if (other.isEmpty) return;
+    final userSnap = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(other)
+        .get();
+    final name =
+        (userSnap.exists ? (userSnap.data()?['name'] as String?) : null) ??
+        'User';
+
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        insetPadding: const EdgeInsets.all(16),
+        child: SizedBox(
+          width: double.maxFinite,
+          height: MediaQuery.of(context).size.height * 0.7,
+          child: UserChatWidget(
+            currentUserId: currentUser.uid,
+            otherUserId: other,
+            otherUserName: name,
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -51,19 +340,6 @@ class _DashboardScreenState extends State<DashboardScreen>
         ),
         backgroundColor: AppTheme.primary,
         foregroundColor: AppTheme.onPrimary,
-        elevation: 0,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.logout),
-            onPressed: () async {
-              await FirebaseAuth.instance.signOut();
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(builder: (context) => const LoginPage()),
-              );
-            },
-          ),
-        ],
       ),
       drawer: _buildDrawer(context),
       body: Stack(
@@ -86,6 +362,21 @@ class _DashboardScreenState extends State<DashboardScreen>
 
                     Map<String, dynamic> userData =
                         snapshot.data!.data() as Map<String, dynamic>? ?? {};
+
+                    // If we have a local in-memory preview but Firestore already has
+                    // a persisted photoUrl (with cache-buster), clear the local
+                    // preview so the NetworkImage is used going forward.
+                    if (_localProfileImageBytes != null &&
+                        userData['photoUrl'] != null &&
+                        (userData['photoUrl'] as String).isNotEmpty) {
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        if (mounted) {
+                          setState(() {
+                            _localProfileImageBytes = null;
+                          });
+                        }
+                      });
+                    }
 
                     return FadeTransition(
                       opacity: _fadeController,
@@ -175,17 +466,57 @@ class _DashboardScreenState extends State<DashboardScreen>
                             ),
                           ),
                           Expanded(
-                            child: ChatWidget(
-                              openAiApiKey: openAiApiKey,
-                              onRequestOpenAppointments: () {
-                                // close overlay and open appointments
-                                setState(() => _isChatOpen = false);
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) =>
-                                        const AppointmentHistoryPage(),
-                                  ),
+                            child: FutureBuilder<QuerySnapshot>(
+                              future: FirebaseFirestore.instance
+                                  .collection('appointments')
+                                  .where(
+                                    'patientId',
+                                    isEqualTo: currentUser!.uid,
+                                  )
+                                  .where('status', isEqualTo: 'confirmed')
+                                  .orderBy('createdAt', descending: true)
+                                  .limit(1)
+                                  .get(),
+                              builder: (context, snapshot) {
+                                if (snapshot.connectionState ==
+                                    ConnectionState.waiting) {
+                                  return const Center(
+                                    child: CircularProgressIndicator(),
+                                  );
+                                }
+
+                                if (snapshot.hasData &&
+                                    snapshot.data!.docs.isNotEmpty) {
+                                  final appt =
+                                      snapshot.data!.docs.first.data()
+                                          as Map<String, dynamic>;
+                                  final doctorId =
+                                      appt['doctorId'] as String? ?? '';
+                                  final doctorName =
+                                      appt['doctorName'] as String? ?? 'Doctor';
+                                  if (doctorId.isNotEmpty) {
+                                    return UserChatWidget(
+                                      currentUserId: currentUser!.uid,
+                                      otherUserId: doctorId,
+                                      otherUserName: doctorName,
+                                    );
+                                  }
+                                }
+
+                                // fallback: AI assistant
+                                return ChatWidget(
+                                  openAiApiKey: openAiApiKey,
+                                  onRequestOpenAppointments: () {
+                                    // close overlay and open appointments
+                                    setState(() => _isChatOpen = false);
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) =>
+                                            const AppointmentHistoryPage(),
+                                      ),
+                                    );
+                                  },
                                 );
                               },
                             ),
@@ -232,6 +563,7 @@ class _DashboardScreenState extends State<DashboardScreen>
         children: [
           Row(
             children: [
+              // Avatar with editable profile photo
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
@@ -254,14 +586,72 @@ class _DashboardScreenState extends State<DashboardScreen>
                     ),
                   ],
                 ),
-                child: CircleAvatar(
-                  radius: 28,
-                  backgroundColor: AppTheme.surface.withOpacity(0.05),
-                  child: Icon(
-                    Icons.waving_hand,
-                    size: 32,
-                    color: AppTheme.onPrimary,
-                  ),
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    CircleAvatar(
+                      radius: 28,
+                      backgroundColor: AppTheme.surface.withOpacity(0.05),
+                      backgroundImage: _localProfileImageBytes != null
+                          ? MemoryImage(_localProfileImageBytes!)
+                                as ImageProvider
+                          : (userData['photoUrl'] != null &&
+                                    (userData['photoUrl'] as String).isNotEmpty
+                                ? NetworkImage(userData['photoUrl'] as String)
+                                : null),
+                      // only show the placeholder icon when there is no background image
+                      child:
+                          (_localProfileImageBytes == null &&
+                              (userData['photoUrl'] == null ||
+                                  (userData['photoUrl'] as String).isEmpty))
+                          ? Icon(
+                              Icons.person,
+                              size: 32,
+                              color: AppTheme.onPrimary,
+                            )
+                          : null,
+                    ),
+                    Positioned(
+                      bottom: -2,
+                      right: -2,
+                      child: GestureDetector(
+                        onTap: () async {
+                          final uid = FirebaseAuth.instance.currentUser?.uid;
+                          if (uid == null) {
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    'You must be signed in to update your profile photo',
+                                  ),
+                                ),
+                              );
+                            }
+                            return;
+                          }
+                          await _showPhotoOptions(uid);
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.08),
+                                blurRadius: 6,
+                              ),
+                            ],
+                          ),
+                          child: Icon(
+                            Icons.edit,
+                            size: 14,
+                            color: AppTheme.primary,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
               const SizedBox(width: 20),
@@ -1150,11 +1540,6 @@ class _DashboardScreenState extends State<DashboardScreen>
         'title': '2-minute Breathing Break',
         'desc':
             'Try 2 minutes of box breathing: inhale 4s, hold 4s, exhale 4s, hold 4s. Repeat 4 times to reduce stress.',
-      },
-      {
-        'title': 'Desk Stretch',
-        'desc':
-            'Stand up and do a gentle neck and shoulder roll. Stretch arms overhead for 30 seconds to ease tension.',
       },
       {
         'title': 'Hydration Nudge',
