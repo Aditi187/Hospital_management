@@ -3,15 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'theme.dart';
 import 'dart:async';
-import 'package:image_picker/image_picker.dart';
-import 'package:firebase_storage/firebase_storage.dart';
-import 'dart:typed_data';
-import 'package:file_picker/file_picker.dart';
-import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
 import 'widgets/user_chat_widget.dart';
-import 'package:hospital_management/widgets/diagnostics_page.dart';
-import 'package:hospital_management/widgets/production_verification_page.dart';
-import 'package:hospital_management/widgets/doctor_availability_calendar.dart';
 
 class DoctorDashboard extends StatefulWidget {
   const DoctorDashboard({super.key});
@@ -28,8 +20,6 @@ class _DoctorDashboardState extends State<DoctorDashboard>
   List<Map<String, dynamic>> patients = [];
   bool isLoading = true;
   StreamSubscription? _notifSub;
-  late ImagePicker _imagePicker;
-  Uint8List? _localDoctorProfileImageBytes;
 
   @override
   void initState() {
@@ -127,46 +117,6 @@ class _DoctorDashboardState extends State<DoctorDashboard>
             }
           });
     }
-    // image picker for profile photo
-    _imagePicker = ImagePicker();
-  }
-
-  Future<void> _showPhotoOptions(String uid) async {
-    if (!mounted) return;
-    showModalBottomSheet(
-      context: context,
-      builder: (context) {
-        return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (!kIsWeb)
-                ListTile(
-                  leading: const Icon(Icons.camera_alt),
-                  title: const Text('Take Photo'),
-                  onTap: () async {
-                    Navigator.of(context).pop();
-                    await _pickAndUploadProfilePhoto(uid, fromCamera: true);
-                  },
-                ),
-              ListTile(
-                leading: const Icon(Icons.photo_library),
-                title: Text(kIsWeb ? 'Choose file' : 'Choose from gallery'),
-                onTap: () async {
-                  Navigator.of(context).pop();
-                  await _pickAndUploadProfilePhoto(uid, fromCamera: false);
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.close),
-                title: const Text('Cancel'),
-                onTap: () => Navigator.of(context).pop(),
-              ),
-            ],
-          ),
-        );
-      },
-    );
   }
 
   Future<void> _loadDoctorProfileAndPatients() async {
@@ -186,15 +136,6 @@ class _DoctorDashboardState extends State<DoctorDashboard>
             .doc(currentDoctorId)
             .get();
         doctorData = userSnap.exists ? (userSnap.data() ?? {}) : {};
-      }
-
-      // If we have an in-memory local preview but a persisted photoUrl exists
-      // in the doctor's profile, clear the local preview so the NetworkImage
-      // (with cache-buster) will be used instead.
-      if (_localDoctorProfileImageBytes != null &&
-          doctorData['photoUrl'] != null &&
-          (doctorData['photoUrl'] as String).isNotEmpty) {
-        _localDoctorProfileImageBytes = null;
       }
 
       // Load patients who have appointments with this doctor
@@ -227,117 +168,6 @@ class _DoctorDashboardState extends State<DoctorDashboard>
     setState(() {
       isLoading = false;
     });
-  }
-
-  Future<void> _pickAndUploadProfilePhoto(
-    String uid, {
-    bool fromCamera = false,
-  }) async {
-    try {
-      debugPrint('Starting doctor pick/upload for uid: $uid');
-      Uint8List? bytes;
-
-      if (kIsWeb) {
-        final result = await FilePicker.platform.pickFiles(
-          type: FileType.image,
-          withData: true,
-        );
-        if (result == null || result.files.isEmpty) return;
-        bytes = result.files.first.bytes;
-      } else {
-        final XFile? file = await _imagePicker.pickImage(
-          source: fromCamera ? ImageSource.camera : ImageSource.gallery,
-          maxWidth: 1024,
-          maxHeight: 1024,
-          imageQuality: 80,
-        );
-        if (file == null) return;
-        bytes = await file.readAsBytes();
-      }
-      if (bytes == null || bytes.isEmpty) {
-        if (context.mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(const SnackBar(content: Text('No image selected')));
-        }
-        return;
-      }
-
-      // debug: bytes length to help diagnose web vs mobile picker
-      debugPrint('Picked image bytes: ${bytes.length}');
-
-      final ref = FirebaseStorage.instance
-          .ref()
-          .child('profile_photos')
-          .child(uid)
-          .child('${DateTime.now().millisecondsSinceEpoch}.jpg');
-
-      final uploadTask = ref.putData(
-        bytes,
-        SettableMetadata(contentType: 'image/jpeg'),
-      );
-      final snapshot = await uploadTask.whenComplete(() {});
-      final url = await snapshot.ref.getDownloadURL();
-      final ts = DateTime.now().millisecondsSinceEpoch;
-      final urlWithTs = url.contains('?') ? '$url&ts=$ts' : '$url?ts=$ts';
-
-      // Update both doctors and users collection for consistency
-      await FirebaseFirestore.instance.collection('doctors').doc(uid).set({
-        'photoUrl': urlWithTs,
-      }, SetOptions(merge: true));
-      await FirebaseFirestore.instance.collection('users').doc(uid).set({
-        'photoUrl': urlWithTs,
-      }, SetOptions(merge: true));
-
-      // show immediate in-memory preview to avoid NetworkImage cache issues
-      setState(() {
-        _localDoctorProfileImageBytes = bytes;
-      });
-
-      // write a small debug doc so we can inspect server-side evidence of the upload
-      try {
-        await FirebaseFirestore.instance
-            .collection('debug_uploads')
-            .doc(uid)
-            .set({
-              'lastUploadAt': FieldValue.serverTimestamp(),
-              'lastUploadUrl': urlWithTs,
-              'lastUploadBytes': bytes.length,
-              'savedPhotoUrl': urlWithTs,
-            }, SetOptions(merge: true));
-      } catch (e) {
-        debugPrint('Failed to write debug_uploads doc (doctor): $e');
-      }
-
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Profile photo updated — ${urlWithTs.split('?').first}',
-            ),
-          ),
-        );
-      }
-    } catch (e, s) {
-      debugPrint('Profile upload error (doctor): $e');
-      debugPrint('$s');
-      try {
-        await FirebaseFirestore.instance
-            .collection('debug_uploads')
-            .doc(uid)
-            .set({
-              'lastUploadAt': FieldValue.serverTimestamp(),
-              'lastUploadError': e.toString(),
-            }, SetOptions(merge: true));
-      } catch (writeErr) {
-        debugPrint('Failed to write debug_uploads error (doctor): $writeErr');
-      }
-      if (context.mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Failed to upload photo: $e')));
-      }
-    }
   }
 
   void _showPatientDetailsDialog(Map<String, dynamic> patient) {
@@ -580,63 +410,19 @@ class _DoctorDashboardState extends State<DoctorDashboard>
                     ),
                   ],
                 ),
-                child: Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    CircleAvatar(
-                      radius: 36,
-                      backgroundColor: AppTheme.surface.withOpacity(0.05),
-                      backgroundImage: _localDoctorProfileImageBytes != null
-                          ? MemoryImage(_localDoctorProfileImageBytes!)
-                                as ImageProvider
-                          : (doctorData['photoUrl'] != null &&
-                                    (doctorData['photoUrl'] as String)
-                                        .isNotEmpty
-                                ? NetworkImage(doctorData['photoUrl'] as String)
-                                : null),
-                      // only show the placeholder icon when there is no background image
-                      child:
-                          (_localDoctorProfileImageBytes == null &&
-                              (doctorData['photoUrl'] == null ||
-                                  (doctorData['photoUrl'] as String).isEmpty))
-                          ? Icon(
-                              Icons.person,
-                              size: 36,
-                              color: AppTheme.onPrimary,
-                            )
-                          : null,
-                    ),
-                    Positioned(
-                      bottom: -4,
-                      right: -4,
-                      child: GestureDetector(
-                        onTap: () async {
-                          if (currentDoctorId.isNotEmpty) {
-                            await _showPhotoOptions(currentDoctorId);
-                            await _loadDoctorProfileAndPatients();
-                          }
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.all(6),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            shape: BoxShape.circle,
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.08),
-                                blurRadius: 6,
-                              ),
-                            ],
-                          ),
-                          child: Icon(
-                            Icons.edit,
-                            size: 14,
-                            color: AppTheme.primary,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
+                child: CircleAvatar(
+                  radius: 36,
+                  backgroundColor: AppTheme.surface.withOpacity(0.05),
+                  backgroundImage:
+                      (doctorData['photoUrl'] != null &&
+                          (doctorData['photoUrl'] as String).isNotEmpty
+                      ? NetworkImage(doctorData['photoUrl'] as String)
+                      : null),
+                  child:
+                      (doctorData['photoUrl'] == null ||
+                          (doctorData['photoUrl'] as String).isEmpty)
+                      ? Icon(Icons.person, size: 36, color: AppTheme.onPrimary)
+                      : null,
                 ),
               ),
               const SizedBox(width: 16),
@@ -778,51 +564,6 @@ class _DoctorDashboardState extends State<DoctorDashboard>
             leading: Icon(Icons.dashboard, color: AppTheme.primary),
             title: const Text('Dashboard'),
             onTap: () => Navigator.pop(context),
-            hoverColor: AppTheme.primaryLight,
-          ),
-          ListTile(
-            leading: Icon(Icons.calendar_month, color: AppTheme.primary),
-            title: const Text('View Availability Calendar'),
-            onTap: () {
-              Navigator.pop(context);
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => DoctorAvailabilityCalendar(
-                    doctorId: currentDoctorId,
-                    doctorName: doctorData['name'] ?? 'Doctor',
-                  ),
-                ),
-              );
-            },
-            hoverColor: AppTheme.primaryLight,
-          ),
-          ListTile(
-            leading: Icon(Icons.bug_report, color: AppTheme.primary),
-            title: const Text('Diagnostics (dev)'),
-            onTap: () {
-              Navigator.pop(context);
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const DiagnosticsPage(),
-                ),
-              );
-            },
-            hoverColor: AppTheme.primaryLight,
-          ),
-          ListTile(
-            leading: Icon(Icons.verified, color: AppTheme.primary),
-            title: const Text('Production Status'),
-            onTap: () {
-              Navigator.pop(context);
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const ProductionVerificationPage(),
-                ),
-              );
-            },
             hoverColor: AppTheme.primaryLight,
           ),
           ListTile(

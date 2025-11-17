@@ -2,11 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:hospital_management/theme.dart';
-import 'package:image_picker/image_picker.dart';
-import 'package:file_picker/file_picker.dart';
-import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
-import 'package:firebase_storage/firebase_storage.dart';
-import 'dart:typed_data';
 import 'dart:async';
 import '../login_page.dart';
 import 'medical_reports_page.dart';
@@ -31,8 +26,6 @@ class _DashboardScreenState extends State<DashboardScreen>
   final User? currentUser = FirebaseAuth.instance.currentUser;
   bool _isChatOpen = false;
   StreamSubscription? _notifSub;
-  late ImagePicker _imagePicker;
-  Uint8List? _localProfileImageBytes;
 
   @override
   void initState() {
@@ -131,46 +124,6 @@ class _DashboardScreenState extends State<DashboardScreen>
             }
           });
     }
-    // image picker instance
-    _imagePicker = ImagePicker();
-  }
-
-  Future<void> _showPhotoOptions(String uid) async {
-    if (!mounted) return;
-    showModalBottomSheet(
-      context: context,
-      builder: (context) {
-        return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (!kIsWeb)
-                ListTile(
-                  leading: const Icon(Icons.camera_alt),
-                  title: const Text('Take Photo'),
-                  onTap: () async {
-                    Navigator.of(context).pop();
-                    await _pickAndUploadProfilePhoto(uid, fromCamera: true);
-                  },
-                ),
-              ListTile(
-                leading: const Icon(Icons.photo_library),
-                title: Text(kIsWeb ? 'Choose file' : 'Choose from gallery'),
-                onTap: () async {
-                  Navigator.of(context).pop();
-                  await _pickAndUploadProfilePhoto(uid, fromCamera: false);
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.close),
-                title: const Text('Cancel'),
-                onTap: () => Navigator.of(context).pop(),
-              ),
-            ],
-          ),
-        );
-      },
-    );
   }
 
   @override
@@ -178,115 +131,6 @@ class _DashboardScreenState extends State<DashboardScreen>
     _fadeController.dispose();
     _notifSub?.cancel();
     super.dispose();
-  }
-
-  Future<void> _pickAndUploadProfilePhoto(
-    String uid, {
-    bool fromCamera = false,
-  }) async {
-    try {
-      debugPrint('Starting pick/upload for uid: $uid');
-      Uint8List? bytes;
-
-      if (kIsWeb) {
-        final result = await FilePicker.platform.pickFiles(
-          type: FileType.image,
-          withData: true,
-        );
-        if (result == null || result.files.isEmpty) return;
-        bytes = result.files.first.bytes;
-      } else {
-        final XFile? file = await _imagePicker.pickImage(
-          source: fromCamera ? ImageSource.camera : ImageSource.gallery,
-          maxWidth: 1024,
-          maxHeight: 1024,
-          imageQuality: 80,
-        );
-        if (file == null) return;
-        bytes = await file.readAsBytes();
-      }
-      if (bytes == null || bytes.isEmpty) {
-        if (context.mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(const SnackBar(content: Text('No image selected')));
-        }
-        return;
-      }
-
-      // debug: bytes length to help diagnose web vs mobile picker
-      debugPrint('Picked image bytes: ${bytes.length}');
-
-      final ref = FirebaseStorage.instance
-          .ref()
-          .child('profile_photos')
-          .child(uid)
-          .child('${DateTime.now().millisecondsSinceEpoch}.jpg');
-
-      final uploadTask = ref.putData(
-        bytes,
-        SettableMetadata(contentType: 'image/jpeg'),
-      );
-      final snapshot = await uploadTask.whenComplete(() {});
-      final url = await snapshot.ref.getDownloadURL();
-      final ts = DateTime.now().millisecondsSinceEpoch;
-      final urlWithTs = url.contains('?') ? '$url&ts=$ts' : '$url?ts=$ts';
-
-      // update (or create) the user's profile photo URL in Firestore (merge to avoid missing-doc errors)
-      await FirebaseFirestore.instance.collection('users').doc(uid).set({
-        'photoUrl': urlWithTs,
-      }, SetOptions(merge: true));
-
-      // keep a local in-memory preview so the UI updates immediately and avoids caching issues
-      setState(() {
-        _localProfileImageBytes = bytes;
-      });
-
-      // write a small debug doc so we can inspect server-side evidence of the upload
-      try {
-        await FirebaseFirestore.instance
-            .collection('debug_uploads')
-            .doc(uid)
-            .set({
-              'lastUploadAt': FieldValue.serverTimestamp(),
-              'lastUploadUrl': urlWithTs,
-              'lastUploadBytes': bytes.length,
-              'savedPhotoUrl': urlWithTs,
-            }, SetOptions(merge: true));
-      } catch (e) {
-        debugPrint('Failed to write debug_uploads doc: $e');
-      }
-
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Profile photo updated — ${urlWithTs.split('?').first}',
-            ),
-          ),
-        );
-      }
-    } catch (e, s) {
-      debugPrint('Profile upload error: $e');
-      debugPrint('$s');
-      // write debug error to Firestore for server-side inspection
-      try {
-        await FirebaseFirestore.instance
-            .collection('debug_uploads')
-            .doc(uid)
-            .set({
-              'lastUploadAt': FieldValue.serverTimestamp(),
-              'lastUploadError': e.toString(),
-            }, SetOptions(merge: true));
-      } catch (writeErr) {
-        debugPrint('Failed to write debug_uploads error: $writeErr');
-      }
-      if (context.mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Failed to upload photo: $e')));
-      }
-    }
   }
 
   Future<void> _openChatByChatId(String chatId) async {
@@ -362,21 +206,6 @@ class _DashboardScreenState extends State<DashboardScreen>
 
                     Map<String, dynamic> userData =
                         snapshot.data!.data() as Map<String, dynamic>? ?? {};
-
-                    // If we have a local in-memory preview but Firestore already has
-                    // a persisted photoUrl (with cache-buster), clear the local
-                    // preview so the NetworkImage is used going forward.
-                    if (_localProfileImageBytes != null &&
-                        userData['photoUrl'] != null &&
-                        (userData['photoUrl'] as String).isNotEmpty) {
-                      WidgetsBinding.instance.addPostFrameCallback((_) {
-                        if (mounted) {
-                          setState(() {
-                            _localProfileImageBytes = null;
-                          });
-                        }
-                      });
-                    }
 
                     return FadeTransition(
                       opacity: _fadeController,
@@ -586,75 +415,23 @@ class _DashboardScreenState extends State<DashboardScreen>
                     ),
                   ],
                 ),
-                child: Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    CircleAvatar(
-                      radius: 28,
-                      backgroundColor: AppTheme.surface.withOpacity(0.05),
-                      backgroundImage: _localProfileImageBytes != null
-                          ? MemoryImage(_localProfileImageBytes!)
-                                as ImageProvider
-                          : (userData['photoUrl'] != null &&
-                                    (userData['photoUrl'] as String).isNotEmpty
-                                ? NetworkImage(userData['photoUrl'] as String)
-                                : null),
-                      // only show the placeholder icon when there is no background image
-                      child:
-                          (_localProfileImageBytes == null &&
-                              (userData['photoUrl'] == null ||
-                                  (userData['photoUrl'] as String).isEmpty))
-                          ? Icon(
-                              Icons.person,
-                              size: 32,
-                              color: AppTheme.onPrimary,
-                            )
-                          : null,
-                    ),
-                    Positioned(
-                      bottom: -2,
-                      right: -2,
-                      child: GestureDetector(
-                        onTap: () async {
-                          final uid = FirebaseAuth.instance.currentUser?.uid;
-                          if (uid == null) {
-                            if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text(
-                                    'You must be signed in to update your profile photo',
-                                  ),
-                                ),
-                              );
-                            }
-                            return;
-                          }
-                          await _showPhotoOptions(uid);
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.all(6),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            shape: BoxShape.circle,
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.08),
-                                blurRadius: 6,
-                              ),
-                            ],
-                          ),
-                          child: Icon(
-                            Icons.edit,
-                            size: 14,
-                            color: AppTheme.primary,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
+                child: CircleAvatar(
+                  radius: 28,
+                  backgroundColor: AppTheme.surface.withOpacity(0.05),
+                  backgroundImage:
+                      (userData['photoUrl'] != null &&
+                          (userData['photoUrl'] as String).isNotEmpty
+                      ? NetworkImage(userData['photoUrl'] as String)
+                      : null),
+                  // only show the placeholder icon when there is no background image
+                  child:
+                      (userData['photoUrl'] == null ||
+                          (userData['photoUrl'] as String).isEmpty)
+                      ? Icon(Icons.person, size: 32, color: AppTheme.onPrimary)
+                      : null,
                 ),
               ),
-              const SizedBox(width: 20),
+              const SizedBox(width: 16),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,

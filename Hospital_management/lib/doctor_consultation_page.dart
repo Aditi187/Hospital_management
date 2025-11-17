@@ -3,10 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'dart:async';
 import 'specialties.dart';
-import 'package:hospital_management/theme.dart';
-import 'widgets/doctor_availability_calendar.dart';
 import 'widgets/doctor_availability_card.dart';
-import 'package:intl/intl.dart';
 
 class DoctorConsultationPage extends StatefulWidget {
   const DoctorConsultationPage({Key? key}) : super(key: key);
@@ -67,7 +64,6 @@ class _DoctorConsultationPageState extends State<DoctorConsultationPage> {
     '10:30 PM',
     '10:45 PM',
     '11:00 PM',
-
   ];
 
   @override
@@ -241,41 +237,6 @@ class _DoctorConsultationPageState extends State<DoctorConsultationPage> {
     });
   }
 
-  Future<void> _openAvailabilityCalendar() async {
-    if (selectedDoctorId == null || selectedDoctorName == null) return;
-
-    final result = await Navigator.push<Map<String, dynamic>>(
-      context,
-      MaterialPageRoute(
-        builder: (context) => DoctorAvailabilityCalendar(
-          doctorId: selectedDoctorId!,
-          doctorName: selectedDoctorName!,
-          onSlotSelected: (date, timeSlot) {
-            // Close the calendar and return the selected slot
-            Navigator.pop(context, {'date': date, 'timeSlot': timeSlot});
-          },
-        ),
-      ),
-    );
-
-    // If user selected a slot, update the form
-    if (result != null && mounted) {
-      setState(() {
-        selectedDate = result['date'] as DateTime;
-        selectedTimeSlot = result['timeSlot'] as String;
-      });
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Selected: ${DateFormat('MMM dd, yyyy').format(selectedDate)} at $selectedTimeSlot',
-          ),
-          backgroundColor: Colors.green,
-        ),
-      );
-    }
-  }
-
   Future<void> _pickDate() async {
     final d = await showDatePicker(
       context: context,
@@ -334,17 +295,6 @@ class _DoctorConsultationPageState extends State<DoctorConsultationPage> {
                             tooltip: 'Change doctor',
                           ),
                         ],
-                      ),
-                      const SizedBox(height: 8),
-                      ElevatedButton.icon(
-                        onPressed: _openAvailabilityCalendar,
-                        icon: const Icon(Icons.calendar_month),
-                        label: const Text('View Availability Calendar'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.green,
-                          foregroundColor: Colors.white,
-                          minimumSize: const Size(double.infinity, 45),
-                        ),
                       ),
                     ],
                   ),
